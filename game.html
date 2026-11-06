@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Giocatori vs IA | Difesa Digitale</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="nav"><div class="wrap"><a class="logo" href="index.html">Difesa Digitale</a><a class="btn ghost" href="index.html">Torna al sito</a></div></header>
+<main class="wrap game">
+<!-- Fase 1: accesso -->
+<section id="join" class="panel card">
+  <h1 style="font-size:1.8rem">Entra in una stanza</h1>
+  <p>Apri la pagina in più schede per testare il multiplayer.</p>
+  <label for="name">Nome utente</label><input id="name" maxlength="16" autocomplete="off">
+  <label for="code">Codice stanza (4 caratteri)</label><input id="code" maxlength="4" autocomplete="off">
+  <div class="row" style="margin-top:20px"><button class="btn" id="create">Crea nuova stanza</button><button class="btn ghost" id="joinBtn">Unisciti alla stanza</button></div>
+  <div class="err" id="err" role="alert"></div>
+</section>
+<!-- Lobby -->
+<section id="lobby" class="panel card hidden">
+  <h2>Stanza <span id="lcode"></span></h2><p><span id="count">0</span>/30 giocatori</p>
+  <ul class="players" id="plist"></ul>
+  <div class="row"><button class="btn ghost" id="ready">Segna come pronto</button><button class="btn ghost hidden" id="bots">Aggiungi 5 bot</button><button class="btn hidden" id="start">Avvia partita</button></div>
+  <p id="wait" style="margin-top:12px">In attesa che l'host avvii il match...</p>
+</section>
+<!-- Fase 2: partita -->
+<section id="play" class="hidden">
+  <div id="endbox" class="end hidden"></div>
+  <div class="stats"><div class="stat"><b id="timer">0</b><span>Secondi rimasti</span></div><div class="stat"><b id="dAi">100</b><span>Distanza IA dal traguardo</span></div><div class="stat"><b id="dTeam">100</b><span>Distanza media team</span></div></div>
+  <div class="layout">
+    <div><div class="track" id="track" aria-label="Plancia di gioco"><div class="finish"></div></div>
+      <div class="card" style="margin-top:16px"><h3 id="q">Domanda</h3><div id="opts"></div><p id="fb" style="margin:0"></p></div></div>
+    <div><h3>Log eventi</h3><ul class="log" id="log" aria-live="polite"></ul></div>
+  </div>
+</section>
+</main>
+<script src="app.js"></script>
+</body></html>
