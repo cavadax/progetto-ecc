@@ -1,0 +1,17 @@
+{
+  "name": "cyber-osint-game",
+  "version": "1.0.0",
+  "description": "SPA formativa sulla sicurezza informatica con gioco OSINT cooperativo Umani vs IA",
+  "main": "server.js",
+  "private": true,
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server.js"
+  },
+  "engines": {
+    "node": ">=22.9"
+  },
+  "dependencies": {
+    "@google/genai": "^3.0.0",
+    "ws": "^8.18.0"
+  }
+}

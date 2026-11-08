@@ -1,0 +1,1478 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cyber OSINT Lab</title>
+  <meta name="description" content="Percorso formativo sulla sicurezza informatica e gioco OSINT cooperativo Umani vs IA.">
+
+  <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'] } } }
+    };
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+
+  <style>
+    html { scroll-behavior: smooth; }
+    body { background: #f8fafc; }
+    .tab-panel.is-active { animation: fadeUp .35s ease both; }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+    .no-scrollbar { scrollbar-width: none; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+
+    .nav-tab { position: relative; }
+    .nav-tab::after {
+      content: ''; position: absolute; left: 12px; right: 12px; bottom: -1px; height: 2px;
+      background: #4f46e5; border-radius: 2px; transform: scaleX(0); transition: transform .25s ease;
+    }
+    .nav-tab.is-active { color: #4338ca; }
+    .nav-tab.is-active::after { transform: scaleX(1); }
+
+    .leaflet-container { font-family: inherit; background: #e2e8f0; }
+    .dot {
+      display: flex; align-items: center; justify-content: center;
+      width: 26px; height: 26px; border-radius: 9999px; border: 2px solid #fff;
+      background: var(--c); color: #fff; font-size: 10px; font-weight: 700;
+      box-shadow: 0 2px 6px rgba(15, 23, 42, .35);
+    }
+    .dot.me { outline: 3px solid rgba(79, 70, 229, .35); }
+
+    #guessBox { width: 300px; height: 220px; transition: width .25s ease, height .25s ease; }
+    #guessBox.expanded { width: min(92%, 760px); height: min(70%, 540px); }
+    @media (max-width: 640px) {
+      #guessBox { width: 62%; height: 170px; }
+      #guessBox.expanded { width: calc(100% - 1.5rem); height: 62%; }
+    }
+
+    .clue { animation: fadeUp .4s ease both; }
+    .spinner { width: 28px; height: 28px; border: 3px solid #e0e7ff; border-top-color: #4f46e5; border-radius: 9999px; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .check-item input:checked + .box { background: #4f46e5; border-color: #4f46e5; }
+    .check-item input:checked + .box svg { opacity: 1; }
+    .check-item input:checked ~ .txt h3 { color: #64748b; text-decoration: line-through; text-decoration-color: #a5b4fc; }
+    .check-item input:focus-visible + .box { outline: 3px solid #a5b4fc; outline-offset: 2px; }
+  </style>
+</head>
+
+<body class="font-sans text-slate-800 antialiased">
+
+  <!-- =========================================================== NAVBAR -->
+  <header class="fixed top-0 inset-x-0 z-[1100] bg-white/85 backdrop-blur border-b border-slate-200">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center gap-4">
+      <a href="#killchain" class="flex items-center gap-2 shrink-0" aria-label="Home">
+        <span class="w-8 h-8 rounded-lg bg-indigo-600 text-white grid place-items-center">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6l8-3z"/><path d="M9 12l2 2 4-4"/></svg>
+        </span>
+        <span class="hidden md:block font-bold tracking-tight">Cyber<span class="text-indigo-600">OSINT</span> Lab</span>
+      </a>
+      <nav class="flex-1 overflow-x-auto no-scrollbar">
+        <ul class="flex items-center gap-1 text-sm font-medium text-slate-500 whitespace-nowrap" role="tablist">
+          <li><button class="nav-tab px-3 py-5 hover:text-slate-900 transition" data-target="killchain" role="tab">1 · Kill Chain</button></li>
+          <li><button class="nav-tab px-3 py-5 hover:text-slate-900 transition" data-target="trappole" role="tab">2 · Le 2 Trappole</button></li>
+          <li><button class="nav-tab px-3 py-5 hover:text-slate-900 transition" data-target="falsi" role="tab">3 · Falsi IA</button></li>
+          <li><button class="nav-tab px-3 py-5 hover:text-slate-900 transition" data-target="difesa" role="tab">4 · Difesa</button></li>
+          <li>
+            <button class="nav-tab px-3 py-5 hover:text-slate-900 transition" data-target="gioco" role="tab">
+              <span class="inline-flex items-center gap-1.5">5 · Gioco <span class="w-1.5 h-1.5 rounded-full bg-indigo-500"></span></span>
+            </button>
+          </li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main class="pt-16 min-h-screen">
+
+    <!-- ======================================================= TAB 1 -->
+    <section id="killchain" class="tab-panel hidden" role="tabpanel">
+      <div class="max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-16 space-y-16">
+        <header class="max-w-3xl">
+          <p class="text-sm font-semibold text-indigo-600 uppercase tracking-wider">Modulo 1 · La teoria di base</p>
+          <h1 class="mt-3 text-3xl sm:text-5xl font-extrabold tracking-tight text-slate-900">La Cyber Kill Chain e la Digital Machine</h1>
+          <p class="mt-5 text-lg text-slate-600 leading-relaxed">Ogni attacco informatico segue una sequenza di passi prevedibile. Conoscerla significa poterla interrompere: basta spezzare un solo anello perché l'intera catena si fermi.</p>
+        </header>
+
+        <!-- Kill chain -->
+        <div>
+          <div class="flex items-end justify-between gap-4 mb-6">
+            <h2 class="text-2xl font-bold tracking-tight">Le 7 fasi di un attacco</h2>
+            <span class="hidden sm:block text-sm text-slate-400">Modello Lockheed Martin</span>
+          </div>
+          <ol class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <li class="relative p-5 rounded-2xl bg-indigo-600 text-white shadow-lg shadow-indigo-200">
+              <span class="text-xs font-bold opacity-80">FASE 01</span>
+              <h3 class="mt-1 text-lg font-bold">Ricognizione</h3>
+              <p class="mt-2 text-sm text-indigo-100 leading-relaxed">Raccolta di informazioni sul bersaglio: persone, abitudini, sistemi, luoghi.</p>
+              <span class="mt-4 inline-block text-[11px] font-semibold bg-white/20 rounded-full px-2.5 py-1">Simulata nel gioco</span>
+            </li>
+            <li class="p-5 rounded-2xl bg-white border border-slate-200">
+              <span class="text-xs font-bold text-slate-400">FASE 02</span>
+              <h3 class="mt-1 text-lg font-bold">Armamento</h3>
+              <p class="mt-2 text-sm text-slate-600 leading-relaxed">Preparazione dell'arma: malware, documento infetto o messaggio esca su misura per la vittima.</p>
+            </li>
+            <li class="p-5 rounded-2xl bg-white border border-slate-200">
+              <span class="text-xs font-bold text-slate-400">FASE 03</span>
+              <h3 class="mt-1 text-lg font-bold">Consegna</h3>
+              <p class="mt-2 text-sm text-slate-600 leading-relaxed">Invio al bersaglio: email di phishing, link, chiavetta USB, messaggio sui social.</p>
+            </li>
+            <li class="p-5 rounded-2xl bg-white border border-slate-200">
+              <span class="text-xs font-bold text-slate-400">FASE 04</span>
+              <h3 class="mt-1 text-lg font-bold">Sfruttamento</h3>
+              <p class="mt-2 text-sm text-slate-600 leading-relaxed">Si attiva una vulnerabilità tecnica o umana: un clic, un allegato aperto, una password digitata.</p>
+            </li>
+            <li class="p-5 rounded-2xl bg-white border border-slate-200">
+              <span class="text-xs font-bold text-slate-400">FASE 05</span>
+              <h3 class="mt-1 text-lg font-bold">Installazione</h3>
+              <p class="mt-2 text-sm text-slate-600 leading-relaxed">Il codice malevolo si installa e si garantisce la persistenza nel sistema.</p>
+            </li>
+            <li class="p-5 rounded-2xl bg-white border border-slate-200">
+              <span class="text-xs font-bold text-slate-400">FASE 06</span>
+              <h3 class="mt-1 text-lg font-bold">Comando e Controllo</h3>
+              <p class="mt-2 text-sm text-slate-600 leading-relaxed">Si apre un canale remoto (C2) da cui l'attaccante governa il dispositivo compromesso.</p>
+            </li>
+            <li class="p-5 rounded-2xl bg-white border border-slate-200">
+              <span class="text-xs font-bold text-slate-400">FASE 07</span>
+              <h3 class="mt-1 text-lg font-bold">Azioni esecutive</h3>
+              <p class="mt-2 text-sm text-slate-600 leading-relaxed">L'obiettivo finale: furto di dati, ricatto, cifratura dei file, sabotaggio.</p>
+            </li>
+            <li class="p-5 rounded-2xl border-2 border-dashed border-slate-200 flex flex-col justify-center">
+              <p class="text-sm text-slate-500 leading-relaxed"><strong class="text-slate-700">Difesa:</strong> interrompere la catena il prima possibile. Più è a monte, meno danni.</p>
+            </li>
+          </ol>
+        </div>
+
+        <!-- OSINT -->
+        <div class="grid lg:grid-cols-5 gap-8 items-start">
+          <div class="lg:col-span-3">
+            <p class="text-sm font-semibold text-indigo-600">Fase 1 in dettaglio</p>
+            <h2 class="mt-1 text-2xl font-bold tracking-tight">Ricognizione: l'OSINT</h2>
+            <p class="mt-4 text-slate-600 leading-relaxed">Prima di colpire, l'attaccante studia. L'<strong>Open Source Intelligence</strong> è la raccolta di informazioni <em>pubblicamente disponibili</em>: nessuna intrusione, nessun reato apparente, solo ciò che noi stessi abbiamo reso visibile.</p>
+            <p class="mt-3 text-slate-600 leading-relaxed">Un profilo social, una foto delle vacanze, un curriculum online: messi insieme, raccontano dove viviamo, con chi, a che ora usciamo e di cosa ci fidiamo.</p>
+            <div class="mt-6 p-5 rounded-2xl bg-indigo-50 border border-indigo-100 flex flex-col sm:flex-row sm:items-center gap-4">
+              <p class="text-sm text-indigo-900 leading-relaxed flex-1"><strong>Il gioco di questo sito simula proprio questa fase.</strong> Da una sola foto dovrete risalire al luogo in cui è stata scattata, esattamente come farebbe un attaccante.</p>
+              <a href="#gioco" class="shrink-0 inline-flex justify-center px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition">Vai al gioco →</a>
+            </div>
+          </div>
+          <div class="lg:col-span-2 p-6 rounded-2xl bg-white border border-slate-200">
+            <h3 class="font-semibold">Fonti tipiche</h3>
+            <ul class="mt-4 space-y-3 text-sm text-slate-600">
+              <li class="flex gap-3"><span class="mt-1.5 w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0"></span>Post, storie e commenti sui social network</li>
+              <li class="flex gap-3"><span class="mt-1.5 w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0"></span>Foto e relativi metadati</li>
+              <li class="flex gap-3"><span class="mt-1.5 w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0"></span>Profili professionali e siti aziendali</li>
+              <li class="flex gap-3"><span class="mt-1.5 w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0"></span>Mappe, immagini satellitari e street view</li>
+              <li class="flex gap-3"><span class="mt-1.5 w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0"></span>Registri pubblici, forum, data breach già diffusi</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Digital machine -->
+        <div>
+          <p class="text-sm font-semibold text-indigo-600">Analisi sociale</p>
+          <h2 class="mt-1 text-2xl font-bold tracking-tight">La Digital Machine</h2>
+          <p class="mt-3 max-w-3xl text-slate-600 leading-relaxed">Sui social network la ricognizione diventa relazione. Il meccanismo è sempre lo stesso, ed è per questo che si può riconoscere.</p>
+          <ol class="mt-8 grid md:grid-cols-5 gap-3">
+            <li class="relative p-5 rounded-2xl bg-white border border-slate-200">
+              <span class="w-8 h-8 rounded-full bg-slate-100 grid place-items-center text-sm font-bold">1</span>
+              <h3 class="mt-3 font-semibold">Osservare</h3>
+              <p class="mt-1.5 text-sm text-slate-600">Studia post, orari, luoghi frequentati e amicizie.</p>
+              <span class="hidden md:block absolute -right-3 top-1/2 -translate-y-1/2 text-slate-300 text-xl z-10">→</span>
+            </li>
+            <li class="relative p-5 rounded-2xl bg-white border border-slate-200">
+              <span class="w-8 h-8 rounded-full bg-slate-100 grid place-items-center text-sm font-bold">2</span>
+              <h3 class="mt-3 font-semibold">Avvicinarsi</h3>
+              <p class="mt-1.5 text-sm text-slate-600">Primo contatto con un pretesto credibile: interessi comuni, profilo costruito ad arte.</p>
+              <span class="hidden md:block absolute -right-3 top-1/2 -translate-y-1/2 text-slate-300 text-xl z-10">→</span>
+            </li>
+            <li class="relative p-5 rounded-2xl bg-white border border-slate-200">
+              <span class="w-8 h-8 rounded-full bg-slate-100 grid place-items-center text-sm font-bold">3</span>
+              <h3 class="mt-3 font-semibold">Costruire fiducia</h3>
+              <p class="mt-1.5 text-sm text-slate-600">Conversazioni costanti, attenzioni, confidenze reciproche.</p>
+              <span class="hidden md:block absolute -right-3 top-1/2 -translate-y-1/2 text-slate-300 text-xl z-10">→</span>
+            </li>
+            <li class="relative p-5 rounded-2xl bg-white border border-slate-200">
+              <span class="w-8 h-8 rounded-full bg-slate-100 grid place-items-center text-sm font-bold">4</span>
+              <h3 class="mt-3 font-semibold">Richiedere</h3>
+              <p class="mt-1.5 text-sm text-slate-600">Foto private, dati sensibili, codici, accessi.</p>
+              <span class="hidden md:block absolute -right-3 top-1/2 -translate-y-1/2 text-slate-300 text-xl z-10">→</span>
+            </li>
+            <li class="p-5 rounded-2xl bg-rose-50 border border-rose-100">
+              <span class="w-8 h-8 rounded-full bg-rose-500 text-white grid place-items-center text-sm font-bold">5</span>
+              <h3 class="mt-3 font-semibold text-rose-900">Creare il danno</h3>
+              <p class="mt-1.5 text-sm text-rose-800/80">Ricatto, furto d'identità, frodi, accesso agli account.</p>
+            </li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================= TAB 2 -->
+    <section id="trappole" class="tab-panel hidden" role="tabpanel">
+      <div class="max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-16 space-y-12">
+        <header class="max-w-3xl">
+          <p class="text-sm font-semibold text-indigo-600 uppercase tracking-wider">Modulo 2 · Informazione e fiducia</p>
+          <h1 class="mt-3 text-3xl sm:text-5xl font-extrabold tracking-tight text-slate-900">Le 2 trappole della sicurezza</h1>
+          <p class="mt-5 text-lg text-slate-600 leading-relaxed">Quasi ogni attacco sfrutta una di due debolezze: le informazioni che regaliamo senza accorgercene e la fiducia che concediamo senza verificare.</p>
+        </header>
+
+        <!-- Trappola 1 -->
+        <article class="rounded-3xl bg-white border border-slate-200 overflow-hidden">
+          <div class="p-6 sm:p-8 border-b border-slate-100">
+            <span class="text-xs font-bold text-indigo-600">TRAPPOLA 1</span>
+            <h2 class="mt-1 text-2xl font-bold tracking-tight">Le informazioni che regaliamo: la foto oltre il soggetto</h2>
+            <p class="mt-2 text-slate-600">Chi guarda una foto vede il soggetto. Chi la analizza vede tutto il resto.</p>
+          </div>
+          <div class="grid lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x divide-slate-100">
+            <div class="p-6 sm:p-8">
+              <h3 class="font-semibold flex items-center gap-2">
+                <svg class="w-5 h-5 text-indigo-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+                Elementi visibili
+              </h3>
+              <ul class="mt-4 space-y-4 text-sm text-slate-600">
+                <li><strong class="text-slate-800">Luce e riflessi</strong><br>La lunghezza delle ombre e i riflessi su vetri e occhiali rivelano l'orario e l'orientamento.</li>
+                <li><strong class="text-slate-800">Lo sfondo</strong><br>Finestre, insegne, mezzi pubblici e scorci tradiscono casa, scuola e percorsi abituali.</li>
+                <li><strong class="text-slate-800">Magliette e gadget</strong><br>Loghi, squadre, scuole, aziende: indicano interessi e appartenenze, ottimi agganci per un approccio.</li>
+              </ul>
+            </div>
+            <div class="p-6 sm:p-8">
+              <h3 class="font-semibold flex items-center gap-2">
+                <svg class="w-5 h-5 text-indigo-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18"/><path d="M10.6 5.1A10 10 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-2.5 3.4M6.6 6.6C3.9 8.3 2 12 2 12s3.5 7 10 7c1.9 0 3.6-.6 5-1.4"/></svg>
+                Elementi invisibili: EXIF
+              </h3>
+              <p class="mt-4 text-sm text-slate-600">Ogni scatto può contenere metadati nascosti salvati dallo smartphone:</p>
+              <div class="mt-4 rounded-xl bg-slate-900 text-slate-100 font-mono text-xs p-4 space-y-1.5">
+                <div class="flex justify-between gap-3"><span class="text-slate-400">GPSLatitude</span><span>46.0664 N</span></div>
+                <div class="flex justify-between gap-3"><span class="text-slate-400">GPSLongitude</span><span>11.1257 E</span></div>
+                <div class="flex justify-between gap-3"><span class="text-slate-400">Make / Model</span><span>Phone X 12 Pro</span></div>
+                <div class="flex justify-between gap-3"><span class="text-slate-400">Software</span><span>OS 17.2</span></div>
+                <div class="flex justify-between gap-3"><span class="text-slate-400">DateTime</span><span>2026:05:14 07:42</span></div>
+              </div>
+              <p class="mt-4 text-sm text-slate-600">Le <strong class="text-slate-800">coordinate GPS</strong> indicano il punto esatto dello scatto; <strong class="text-slate-800">modello e sistema</strong> permettono di preparare un malware mirato per quel dispositivo.</p>
+            </div>
+            <div class="p-6 sm:p-8">
+              <h3 class="font-semibold flex items-center gap-2">
+                <svg class="w-5 h-5 text-indigo-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                Il problema della permanenza
+              </h3>
+              <p class="mt-4 text-sm text-slate-600 leading-relaxed">Una volta caricata online o inviata in chat o via P2P, l'immagine <strong class="text-slate-800">esce definitivamente dal nostro controllo</strong>.</p>
+              <ul class="mt-4 space-y-2 text-sm text-slate-600">
+                <li class="flex gap-2"><span class="text-indigo-500">—</span>screenshot e inoltri</li>
+                <li class="flex gap-2"><span class="text-indigo-500">—</span>backup e copie sui server</li>
+                <li class="flex gap-2"><span class="text-indigo-500">—</span>archivi, cache, condivisioni P2P</li>
+              </ul>
+              <p class="mt-4 text-sm font-medium text-slate-800">"Elimina" cancella la nostra copia, non le altre.</p>
+            </div>
+          </div>
+        </article>
+
+        <!-- Trappola 2 -->
+        <article class="rounded-3xl bg-white border border-slate-200 overflow-hidden">
+          <div class="p-6 sm:p-8 border-b border-slate-100">
+            <span class="text-xs font-bold text-indigo-600">TRAPPOLA 2</span>
+            <h2 class="mt-1 text-2xl font-bold tracking-tight">La fiducia cieca: la vulnerabilità umana</h2>
+            <p class="mt-2 text-slate-600">Il punto debole più sfruttato non è il software: è la nostra tendenza a fidarci.</p>
+          </div>
+          <div class="grid md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-slate-100">
+            <div class="p-6 sm:p-8">
+              <h3 class="font-semibold">Ingegneria sociale fisica: il cavo USB trappola</h3>
+              <p class="mt-3 text-sm text-slate-600 leading-relaxed">Una chiavetta o un cavo di ricarica "dimenticato" a terra, in un parcheggio o in una sala riunioni. La curiosità fa il resto.</p>
+              <p class="mt-3 text-sm text-slate-600 leading-relaxed">All'interno può nascondersi un piccolo chip che il computer riconosce come <strong class="text-slate-800">tastiera</strong>: appena collegato digita comandi malevoli in pochi secondi, più veloce di qualunque reazione.</p>
+              <div class="mt-5 p-4 rounded-xl bg-amber-50 border border-amber-100 text-sm text-amber-900">Regola semplice: un dispositivo USB trovato non si collega. Mai.</div>
+            </div>
+            <div class="p-6 sm:p-8">
+              <h3 class="font-semibold">L'IA generativa e l'identità: i deepfake</h3>
+              <p class="mt-3 text-sm text-slate-600 leading-relaxed">Voce e volto non sono più una prova. Nel 2024, a Hong Kong, un dipendente di una multinazionale ha partecipato a una videochiamata con il direttore finanziario e diversi colleghi: <strong class="text-slate-800">erano tutti deepfake</strong>. Risultato: bonifici per circa 25 milioni di dollari.</p>
+              <p class="mt-3 text-sm text-slate-600 leading-relaxed">Lo stesso schema si usa con le voci clonate: "Sono io, ho perso il telefono, mandami subito dei soldi".</p>
+              <div class="mt-5 p-4 rounded-xl bg-indigo-50 border border-indigo-100 text-sm text-indigo-900">Difesa: verificare sempre tramite un <strong>canale diverso</strong> (richiamare un numero noto) e concordare una parola di controllo.</div>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- ======================================================= TAB 3 -->
+    <section id="falsi" class="tab-panel hidden" role="tabpanel">
+      <div class="max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-16 space-y-12">
+        <header class="max-w-3xl">
+          <p class="text-sm font-semibold text-indigo-600 uppercase tracking-wider">Modulo 3 · Guida pratica</p>
+          <h1 class="mt-3 text-3xl sm:text-5xl font-extrabold tracking-tight text-slate-900">Come scovare le falsificazioni dell'IA</h1>
+          <p class="mt-5 text-lg text-slate-600 leading-relaxed">Le immagini e i video generati sono sempre più credibili, ma l'IA non "capisce" il mondo fisico: lo imita. Ecco dove inciampa più spesso.</p>
+        </header>
+
+        <div class="grid md:grid-cols-3 gap-6">
+          <article class="p-7 rounded-3xl bg-white border border-slate-200 hover:shadow-xl hover:shadow-slate-200/60 hover:-translate-y-1 transition">
+            <div class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 grid place-items-center">
+              <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14l7 7M21 14l-7 7"/></svg>
+            </div>
+            <h2 class="mt-5 text-xl font-bold">Geometrie imperfette</h2>
+            <ul class="mt-4 space-y-3 text-sm text-slate-600">
+              <li class="flex gap-2"><span class="text-indigo-500 font-bold">·</span>Sfondi che perdono continuità: una linea dell'orizzonte o un muro che si interrompono dietro il soggetto.</li>
+              <li class="flex gap-2"><span class="text-indigo-500 font-bold">·</span>Piastrelle, finestre o ringhiere che cambiano verso, dimensione o numero.</li>
+              <li class="flex gap-2"><span class="text-indigo-500 font-bold">·</span>Scritte illeggibili, lettere inventate, loghi o simboli sfocati su vestiti e accessori.</li>
+            </ul>
+          </article>
+
+          <article class="p-7 rounded-3xl bg-white border border-slate-200 hover:shadow-xl hover:shadow-slate-200/60 hover:-translate-y-1 transition">
+            <div class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 grid place-items-center">
+              <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-4 0v5M14 10V4a2 2 0 0 0-4 0v6M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.9-6-2.4l-3.6-3.6a2 2 0 0 1 2.8-2.8L7 15"/></svg>
+            </div>
+            <h2 class="mt-5 text-xl font-bold">Anatomia ed elementi dinamici</h2>
+            <ul class="mt-4 space-y-3 text-sm text-slate-600">
+              <li class="flex gap-2"><span class="text-indigo-500 font-bold">·</span>Dita in numero sbagliato, fuse tra loro o piegate in modo impossibile.</li>
+              <li class="flex gap-2"><span class="text-indigo-500 font-bold">·</span>Ginocchia, gomiti e giunzioni che nei movimenti creano pieghe o incavi innaturali.</li>
+              <li class="flex gap-2"><span class="text-indigo-500 font-bold">·</span>Nei video: contorni del viso che "tremano", denti e orecchini che cambiano forma tra un fotogramma e l'altro.</li>
+            </ul>
+          </article>
+
+          <article class="p-7 rounded-3xl bg-white border border-slate-200 hover:shadow-xl hover:shadow-slate-200/60 hover:-translate-y-1 transition">
+            <div class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 grid place-items-center">
+              <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+            </div>
+            <h2 class="mt-5 text-xl font-bold">Luci e ombre incoerenti</h2>
+            <ul class="mt-4 space-y-3 text-sm text-slate-600">
+              <li class="flex gap-2"><span class="text-indigo-500 font-bold">·</span>Punti luce presenti in una zona e assenti nello scatto successivo dello stesso ambiente.</li>
+              <li class="flex gap-2"><span class="text-indigo-500 font-bold">·</span>Ombre che puntano in direzioni diverse pur con un'unica sorgente di luce.</li>
+              <li class="flex gap-2"><span class="text-indigo-500 font-bold">·</span>Riflessi negli occhi o sugli specchi che non corrispondono alla scena.</li>
+            </ul>
+          </article>
+        </div>
+
+        <div class="p-6 sm:p-8 rounded-3xl bg-slate-900 text-white grid sm:grid-cols-3 gap-6">
+          <div><p class="text-indigo-300 text-sm font-semibold">01 · Ingrandisci</p><p class="mt-1 text-sm text-slate-300">I difetti si nascondono nei dettagli: mani, testi, bordi.</p></div>
+          <div><p class="text-indigo-300 text-sm font-semibold">02 · Confronta</p><p class="mt-1 text-sm text-slate-300">Metti a confronto più scatti o fotogrammi della stessa scena.</p></div>
+          <div><p class="text-indigo-300 text-sm font-semibold">03 · Cerca la fonte</p><p class="mt-1 text-sm text-slate-300">Una ricerca inversa dell'immagine rivela spesso l'origine.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================= TAB 4 -->
+    <section id="difesa" class="tab-panel hidden" role="tabpanel">
+      <div class="max-w-3xl mx-auto px-4 sm:px-6 py-12 sm:py-16">
+        <header>
+          <p class="text-sm font-semibold text-indigo-600 uppercase tracking-wider">Modulo 4 · Soluzioni pratiche</p>
+          <h1 class="mt-3 text-3xl sm:text-5xl font-extrabold tracking-tight text-slate-900">Check-list di difesa finale</h1>
+          <p class="mt-5 text-lg text-slate-600 leading-relaxed">Quattro abitudini che spezzano la Kill Chain prima ancora che inizi. Spunta ciò che hai già fatto.</p>
+        </header>
+
+        <div class="mt-10 p-5 rounded-2xl bg-white border border-slate-200">
+          <div class="flex items-center justify-between text-sm">
+            <span class="font-semibold" id="checkLabel">0 di 4 completate</span>
+            <button id="checkReset" class="text-slate-400 hover:text-slate-700 transition">Azzera</button>
+          </div>
+          <div class="mt-3 h-2 rounded-full bg-slate-100 overflow-hidden">
+            <div id="checkBar" class="h-full w-0 bg-indigo-600 rounded-full transition-all duration-500"></div>
+          </div>
+          <p id="checkDone" class="hidden mt-3 text-sm text-emerald-700 font-medium">Ottimo lavoro: hai chiuso le porte più usate dagli attaccanti.</p>
+        </div>
+
+        <div class="mt-6 space-y-3" id="checklist">
+          <label class="check-item flex gap-4 p-5 rounded-2xl bg-white border border-slate-200 cursor-pointer hover:border-indigo-200 transition">
+            <input type="checkbox" class="sr-only" data-key="gps">
+            <span class="box mt-0.5 w-6 h-6 rounded-md border-2 border-slate-300 grid place-items-center shrink-0 transition">
+              <svg class="w-4 h-4 text-white opacity-0 transition" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>
+            </span>
+            <span class="txt">
+              <h3 class="font-semibold transition">Pulizia metadati</h3>
+              <p class="mt-1 text-sm text-slate-600">Disattiva il salvataggio della posizione GPS nelle foto dello smartphone.</p>
+              <p class="mt-2 text-xs text-slate-400">iPhone: Impostazioni → Privacy e sicurezza → Localizzazione → Fotocamera → Mai · Android: app Fotocamera → Impostazioni → Tag/Salva posizione → Off</p>
+            </span>
+          </label>
+          <label class="check-item flex gap-4 p-5 rounded-2xl bg-white border border-slate-200 cursor-pointer hover:border-indigo-200 transition">
+            <input type="checkbox" class="sr-only" data-key="perms">
+            <span class="box mt-0.5 w-6 h-6 rounded-md border-2 border-slate-300 grid place-items-center shrink-0 transition">
+              <svg class="w-4 h-4 text-white opacity-0 transition" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>
+            </span>
+            <span class="txt">
+              <h3 class="font-semibold transition">Controllo permessi</h3>
+              <p class="mt-1 text-sm text-slate-600">Revisiona periodicamente quali app accedono a fotocamera e microfono.</p>
+              <p class="mt-2 text-xs text-slate-400">iPhone: Impostazioni → Privacy e sicurezza → Fotocamera / Microfono · Android: Impostazioni → Privacy → Gestione autorizzazioni</p>
+            </span>
+          </label>
+          <label class="check-item flex gap-4 p-5 rounded-2xl bg-white border border-slate-200 cursor-pointer hover:border-indigo-200 transition">
+            <input type="checkbox" class="sr-only" data-key="physical">
+            <span class="box mt-0.5 w-6 h-6 rounded-md border-2 border-slate-300 grid place-items-center shrink-0 transition">
+              <svg class="w-4 h-4 text-white opacity-0 transition" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>
+            </span>
+            <span class="txt">
+              <h3 class="font-semibold transition">Protezione fisica</h3>
+              <p class="mt-1 text-sm text-slate-600">Usa un otturatore o copri-webcam e non collegare cavi o chiavette USB sconosciuti.</p>
+              <p class="mt-2 text-xs text-slate-400">Ricarica solo con caricatori tuoi; nei luoghi pubblici preferisci la presa elettrica alla porta USB.</p>
+            </span>
+          </label>
+          <label class="check-item flex gap-4 p-5 rounded-2xl bg-white border border-slate-200 cursor-pointer hover:border-indigo-200 transition">
+            <input type="checkbox" class="sr-only" data-key="updates">
+            <span class="box mt-0.5 w-6 h-6 rounded-md border-2 border-slate-300 grid place-items-center shrink-0 transition">
+              <svg class="w-4 h-4 text-white opacity-0 transition" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>
+            </span>
+            <span class="txt">
+              <h3 class="font-semibold transition">Aggiornamenti</h3>
+              <p class="mt-1 text-sm text-slate-600">Mantieni sistema operativo, browser e app sempre aggiornati.</p>
+              <p class="mt-2 text-xs text-slate-400">Attiva gli aggiornamenti automatici: ogni patch chiude una vulnerabilità già nota agli attaccanti.</p>
+            </span>
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================= TAB 5 -->
+    <section id="gioco" class="tab-panel hidden" role="tabpanel">
+      <div class="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
+
+        <!-- Barra di stato partita -->
+        <div id="gHeader" class="hidden mb-6 flex flex-wrap items-center gap-x-6 gap-y-3 p-4 rounded-2xl bg-white border border-slate-200">
+          <div class="flex items-center gap-3">
+            <span class="text-xs font-semibold text-slate-400 uppercase">Stanza</span>
+            <span id="hCode" class="font-mono font-bold text-indigo-600 text-lg"></span>
+          </div>
+          <div class="text-sm text-slate-600"><span id="hRole"></span></div>
+          <div class="text-sm text-slate-600"><span id="hPlayers"></span></div>
+          <div class="text-sm text-slate-600 hidden" id="hRoundWrap">Round <strong id="hRound"></strong></div>
+          <div class="ml-auto flex items-center gap-4">
+            <div id="hScore" class="hidden flex items-center gap-2 text-sm font-semibold">
+              <span class="px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700">Umani <span id="hHum">0</span></span>
+              <span class="text-slate-300">vs</span>
+              <span class="px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700">IA <span id="hAi">0</span></span>
+            </div>
+            <button id="btnLeave" class="text-sm text-slate-400 hover:text-rose-600 transition">Esci</button>
+          </div>
+        </div>
+
+        <!-- Server non raggiungibile -->
+        <div id="gNoServer" class="hidden p-8 rounded-3xl bg-amber-50 border border-amber-100 text-amber-900">
+          <h2 class="text-xl font-bold">Avvia il server di gioco</h2>
+          <p class="mt-2 text-sm leading-relaxed">Il gioco multiplayer ha bisogno del server Node.js. Dalla cartella del progetto esegui <code class="px-1.5 py-0.5 rounded bg-white font-mono">npm install &amp;&amp; npm start</code> e apri l'indirizzo mostrato nel terminale (es. <code class="px-1.5 py-0.5 rounded bg-white font-mono">http://localhost:3000</code>).</p>
+        </div>
+
+        <!-- Ingresso -->
+        <div id="gEntry">
+          <header class="max-w-3xl">
+            <p class="text-sm font-semibold text-indigo-600 uppercase tracking-wider">Modulo 5 · Mettiti alla prova</p>
+            <h1 class="mt-3 text-3xl sm:text-5xl font-extrabold tracking-tight text-slate-900">Umani vs IA: caccia al luogo</h1>
+            <p class="mt-5 text-lg text-slate-600 leading-relaxed">Siete una squadra di analisti OSINT. Da una sola foto dovete capire dove è stata scattata, più vicino possibile, prima e meglio di un'intelligenza artificiale.</p>
+          </header>
+
+          <ol class="mt-8 grid sm:grid-cols-3 gap-3 text-sm">
+            <li class="p-4 rounded-2xl bg-white border border-slate-200"><strong class="block text-slate-900">1 · Osserva</strong><span class="text-slate-600">L'host proietta una foto a tutti i giocatori.</span></li>
+            <li class="p-4 rounded-2xl bg-white border border-slate-200"><strong class="block text-slate-900">2 · Un solo guess</strong><span class="text-slate-600">Clicca sulla mappa in basso a destra e conferma.</span></li>
+            <li class="p-4 rounded-2xl bg-white border border-slate-200"><strong class="block text-slate-900">3 · Batti l'IA</strong><span class="text-slate-600">Conta il miglior giocatore della squadra: fino a 5000 punti.</span></li>
+          </ol>
+
+          <div id="entryError" class="hidden mt-6 p-4 rounded-xl bg-rose-50 border border-rose-100 text-sm text-rose-800"></div>
+
+          <div class="mt-6 grid md:grid-cols-2 gap-6">
+            <form id="formCreate" class="p-6 sm:p-8 rounded-3xl bg-white border border-slate-200" autocomplete="off">
+              <h2 class="text-xl font-bold">Crea una lobby</h2>
+              <p class="mt-1 text-sm text-slate-500">Sei l'host: carichi le foto e guidi la partita.</p>
+              <label class="block mt-6 text-sm font-medium">Codice stanza</label>
+              <div class="mt-1.5 flex gap-2">
+                <input id="cCode" required minlength="3" maxlength="12" class="flex-1 min-w-0 px-4 py-2.5 rounded-xl border border-slate-300 font-mono uppercase focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent" placeholder="ES. CYBER1">
+                <button type="button" id="cGen" class="px-3 rounded-xl border border-slate-300 text-sm text-slate-600 hover:bg-slate-50 transition">Genera</button>
+              </div>
+              <label class="block mt-4 text-sm font-medium">Il tuo username</label>
+              <input id="cName" required maxlength="20" class="mt-1.5 w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent" placeholder="Host">
+              <button class="mt-6 w-full py-3 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition disabled:opacity-50">Crea lobby</button>
+            </form>
+
+            <form id="formJoin" class="p-6 sm:p-8 rounded-3xl bg-white border border-slate-200" autocomplete="off">
+              <h2 class="text-xl font-bold">Unisciti a una lobby</h2>
+              <p class="mt-1 text-sm text-slate-500">Fino a 30 giocatori nella stessa squadra.</p>
+              <label class="block mt-6 text-sm font-medium">Codice stanza</label>
+              <input id="jCode" required maxlength="12" class="mt-1.5 w-full px-4 py-2.5 rounded-xl border border-slate-300 font-mono uppercase focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent" placeholder="Codice ricevuto dall'host">
+              <label class="block mt-4 text-sm font-medium">Il tuo username</label>
+              <input id="jName" required maxlength="20" class="mt-1.5 w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent" placeholder="Il tuo nome">
+              <button class="mt-6 w-full py-3 rounded-xl bg-slate-900 text-white font-semibold hover:bg-slate-700 transition disabled:opacity-50">Entra</button>
+            </form>
+          </div>
+        </div>
+
+        <!-- Lobby -->
+        <div id="gLobby" class="hidden">
+          <div class="grid lg:grid-cols-3 gap-6">
+            <!-- Partecipanti -->
+            <div class="p-6 rounded-3xl bg-white border border-slate-200 h-fit">
+              <div class="flex items-center justify-between">
+                <h2 class="font-bold">Squadra Umani</h2>
+                <span id="lCount" class="text-sm font-semibold text-indigo-600"></span>
+              </div>
+              <p class="mt-1 text-xs text-slate-400">Host: <span id="lHost"></span></p>
+              <ul id="lPlayers" class="mt-4 space-y-2 max-h-[420px] overflow-y-auto pr-1"></ul>
+              <p id="lEmpty" class="mt-4 text-sm text-slate-400">Nessun giocatore ancora. Condividi il codice stanza!</p>
+            </div>
+
+            <!-- Host: foto e impostazioni -->
+            <div class="host-only lg:col-span-2 space-y-6">
+              <div class="p-6 rounded-3xl bg-white border border-slate-200">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 class="font-bold">Foto della partita</h2>
+                    <p class="text-sm text-slate-500"><span id="lLocated">0</span> foto con posizione su <span id="lImgCount">0</span></p>
+                  </div>
+                  <label class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition cursor-pointer">
+                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                    Carica foto
+                    <input id="fileInput" type="file" accept="image/jpeg,image/png,image/webp" multiple class="hidden">
+                  </label>
+                </div>
+                <p id="lUploading" class="hidden mt-3 text-sm text-indigo-600">Elaborazione foto in corso…</p>
+                <div id="lImages" class="mt-5 grid sm:grid-cols-2 gap-3"></div>
+                <p id="lNoImages" class="mt-5 text-sm text-slate-400">Carica le foto che i giocatori dovranno localizzare. Se una foto contiene le coordinate GPS nei metadati, la posizione verrà letta automaticamente.</p>
+
+                <div class="mt-6">
+                  <p class="text-sm font-medium">Posizione della foto selezionata: <span id="lSelName" class="text-indigo-600">nessuna</span></p>
+                  <p class="text-xs text-slate-400 mt-0.5">Clicca sulla mappa per impostare il punto esatto di scatto. Le coordinate restano sul server fino alla rivelazione.</p>
+                  <div id="placeMap" class="mt-3 h-72 rounded-2xl overflow-hidden border border-slate-200"></div>
+                </div>
+              </div>
+
+              <div class="p-6 rounded-3xl bg-white border border-slate-200">
+                <h2 class="font-bold">Impostazioni</h2>
+                <div class="mt-4 grid sm:grid-cols-3 gap-4">
+                  <label class="block text-sm">
+                    <span class="font-medium">Numero di round</span>
+                    <input id="sRounds" type="number" min="1" max="30" class="mt-1.5 w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                  </label>
+                  <label class="block text-sm">
+                    <span class="font-medium">Scala del punteggio</span>
+                    <select id="sScale" class="mt-1.5 w-full px-3 py-2 rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                      <option value="city">Città (luoghi vicini)</option>
+                      <option value="region">Regione / Paese</option>
+                      <option value="world">Mondo</option>
+                    </select>
+                  </label>
+                  <label class="flex items-start gap-3 text-sm sm:pt-7 cursor-pointer">
+                    <input id="sAiTools" type="checkbox" class="mt-0.5 w-4 h-4 accent-indigo-600">
+                    <span><span class="font-medium">L'IA può consultare le mappe</span><br><span class="text-xs text-slate-500">ricerche su OpenStreetMap di insegne, vie e monumenti letti nella foto</span></span>
+                  </label>
+                </div>
+                <p class="mt-3 text-xs text-slate-400">5000 punti entro 20 m, poi il punteggio cala con la distanza. La scala decide quanto velocemente: scegli "Città" se le foto sono tutte della stessa zona.</p>
+                <div id="aiWarn" class="hidden mt-4 p-3 rounded-xl bg-amber-50 border border-amber-100 text-sm text-amber-900">La chiave <code class="font-mono">GEMINI_API_KEY</code> non è configurata sul server: l'IA non potrà giocare e prenderà 0 punti. Vedi il README per ottenerne una gratuita.</div>
+                <p class="mt-3 text-xs text-slate-500">L'avversario è una vera IA (Google Gemini): riceve solo i pixel della foto, senza metadati, senza nome del file e senza la posizione. Con il piano gratuito Google può usare le immagini per migliorare i propri servizi: evita foto con persone riconoscibili.</p>
+                <div class="mt-6 flex flex-wrap items-center gap-4">
+                  <button id="btnStart" class="px-6 py-3 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition disabled:opacity-40 disabled:cursor-not-allowed">Start Partita</button>
+                  <span id="startHint" class="text-sm text-slate-500"></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Giocatore: attesa -->
+            <div class="player-only lg:col-span-2 p-8 sm:p-10 rounded-3xl bg-white border border-slate-200 flex flex-col items-center justify-center text-center">
+              <div class="spinner"></div>
+              <h2 class="mt-5 text-2xl font-bold">Sei nella squadra!</h2>
+              <p class="mt-2 text-slate-600 max-w-md">In attesa che l'host avvii la partita. Intanto ripassa: cosa può rivelare una foto oltre al soggetto?</p>
+              <div class="mt-6 grid sm:grid-cols-3 gap-3 text-sm text-left w-full max-w-xl">
+                <div class="p-3 rounded-xl bg-slate-50"><strong>Segnaletica</strong><br><span class="text-slate-500">lingua, colori, lato di guida</span></div>
+                <div class="p-3 rounded-xl bg-slate-50"><strong>Architettura</strong><br><span class="text-slate-500">tetti, materiali, stili</span></div>
+                <div class="p-3 rounded-xl bg-slate-50"><strong>Natura</strong><br><span class="text-slate-500">vegetazione, luce, clima</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Scelta foto -->
+        <div id="gSelect" class="hidden">
+          <div class="host-only p-6 sm:p-8 rounded-3xl bg-white border border-slate-200">
+            <h2 class="text-xl font-bold">Round <span class="selRound"></span>: scegli la foto da proiettare</h2>
+            <p class="mt-1 text-sm text-slate-500">La foto apparirà sugli schermi di tutti i giocatori, senza metadati.</p>
+            <div id="selGrid" class="mt-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4"></div>
+          </div>
+          <div class="player-only p-10 rounded-3xl bg-white border border-slate-200 flex flex-col items-center text-center">
+            <div class="spinner"></div>
+            <h2 class="mt-5 text-2xl font-bold">Round <span class="selRound"></span> in preparazione</h2>
+            <p class="mt-2 text-slate-600">L'host sta scegliendo la prossima foto…</p>
+          </div>
+        </div>
+
+        <!-- Round -->
+        <div id="gRound" class="hidden">
+          <div id="stage" class="relative h-[calc(100vh-15rem)] min-h-[420px] rounded-3xl overflow-hidden bg-slate-900">
+            <img id="roundImg" alt="Foto da localizzare" class="absolute inset-0 w-full h-full object-contain select-none" draggable="false">
+
+            <div class="absolute top-3 left-3 flex items-center gap-2">
+              <span class="px-3 py-1.5 rounded-full bg-white/90 backdrop-blur text-sm font-semibold">Round <span id="rRound"></span></span>
+              <span id="rCount" class="px-3 py-1.5 rounded-full bg-white/90 backdrop-blur text-sm text-slate-600"></span>
+            </div>
+            <button id="btnFull" class="absolute top-3 right-3 p-2 rounded-full bg-white/90 backdrop-blur hover:bg-white transition" title="Schermo intero" aria-label="Schermo intero">
+              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+            </button>
+
+            <!-- IA -->
+            <div class="absolute left-3 bottom-3 w-64 max-w-[calc(100%-1.5rem)] p-4 rounded-2xl bg-white/90 backdrop-blur hidden sm:block">
+              <div class="flex items-center gap-2 text-sm font-semibold text-rose-700">
+                <span id="aiPulse" class="relative flex w-2.5 h-2.5"><span class="absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75 animate-ping"></span><span class="relative inline-flex rounded-full w-2.5 h-2.5 bg-rose-500"></span></span>
+                IA avversaria
+              </div>
+              <p id="aiStatusText" class="mt-1.5 text-xs text-slate-600"></p>
+            </div>
+
+            <!-- Host: pannello di regia -->
+            <div class="host-only absolute right-3 top-14 bottom-3 w-64 max-w-[calc(100%-1.5rem)] p-4 rounded-2xl bg-white/95 backdrop-blur flex flex-col">
+              <h3 class="font-semibold text-sm">Risposte della squadra</h3>
+              <ul id="rPlayers" class="mt-3 space-y-1.5 text-sm overflow-y-auto flex-1"></ul>
+              <button id="btnReveal" class="mt-3 w-full py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition">Rivela risultati</button>
+            </div>
+
+            <!-- Giocatore: mappa guess -->
+            <div id="guessBox" class="player-only absolute right-3 bottom-3 rounded-2xl overflow-hidden bg-white shadow-2xl flex flex-col">
+              <div class="relative flex-1">
+                <div id="guessMap" class="absolute inset-0"></div>
+                <button id="btnExpand" class="absolute top-2 right-2 z-[500] p-1.5 rounded-lg bg-white shadow text-slate-600 hover:text-slate-900" title="Ingrandisci mappa" aria-label="Ingrandisci mappa">
+                  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+                </button>
+              </div>
+              <button id="btnGuess" class="m-2 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition disabled:bg-slate-300 disabled:cursor-not-allowed" disabled>Clicca sulla mappa</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- In attesa dell'IA -->
+        <div id="gWait" class="hidden p-10 rounded-3xl bg-white border border-slate-200 flex flex-col items-center text-center">
+          <div class="spinner"></div>
+          <h2 class="mt-5 text-2xl font-bold">L'IA sta ancora ragionando…</h2>
+          <p id="waitText" class="mt-2 text-slate-600">I guess della squadra sono chiusi. I risultati arrivano appena l'IA risponde.</p>
+          <button id="btnRevealNow" class="host-only mt-6 px-5 py-2.5 rounded-xl border border-slate-300 text-sm font-semibold hover:bg-slate-50 transition">Rivela senza IA (0 punti all'IA)</button>
+        </div>
+
+        <!-- Risultati round -->
+        <div id="gResult" class="hidden space-y-6">
+          <div class="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p class="text-sm font-semibold text-indigo-600">Risultati</p>
+              <h2 class="text-2xl sm:text-3xl font-extrabold tracking-tight">Round <span id="resRound"></span> · <span id="resVerdict"></span></h2>
+            </div>
+            <div class="host-only"><button id="btnNext" class="px-6 py-3 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition">Prossimo round</button></div>
+            <p class="player-only text-sm text-slate-500">In attesa dell'host…</p>
+          </div>
+
+          <div class="grid lg:grid-cols-5 gap-6">
+            <div class="lg:col-span-3 rounded-3xl overflow-hidden border border-slate-200 bg-white">
+              <div id="resultMap" class="h-[420px]"></div>
+              <div class="px-4 py-3 flex flex-wrap gap-4 text-xs text-slate-500 border-t border-slate-100">
+                <span class="flex items-center gap-1.5"><span class="dot" style="--c:#10b981;width:16px;height:16px;font-size:8px">★</span>Posizione reale</span>
+                <span class="flex items-center gap-1.5"><span class="dot" style="--c:#4f46e5;width:16px;height:16px"></span>Miglior umano</span>
+                <span class="flex items-center gap-1.5"><span class="dot" style="--c:#94a3b8;width:16px;height:16px"></span>Altri giocatori</span>
+                <span class="flex items-center gap-1.5"><span class="dot" style="--c:#e11d48;width:16px;height:16px"></span>IA</span>
+              </div>
+            </div>
+
+            <div class="lg:col-span-2 space-y-4">
+              <div id="cardHum" class="p-5 rounded-3xl border-2 bg-white">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm font-semibold text-indigo-700">Squadra Umani</span>
+                  <span class="winBadge hidden text-xs font-bold px-2 py-1 rounded-full bg-indigo-600 text-white">Vince il round</span>
+                </div>
+                <p class="mt-3 text-4xl font-extrabold tabular-nums" id="resHumScore">0</p>
+                <p class="mt-1 text-sm text-slate-600" id="resHumInfo"></p>
+              </div>
+              <div id="cardAi" class="p-5 rounded-3xl border-2 bg-white">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm font-semibold text-rose-700">Intelligenza Artificiale</span>
+                  <span class="winBadge hidden text-xs font-bold px-2 py-1 rounded-full bg-rose-600 text-white">Vince il round</span>
+                </div>
+                <p class="mt-3 text-4xl font-extrabold tabular-nums" id="resAiScore">0</p>
+                <p class="mt-1 text-sm text-slate-600" id="resAiInfo"></p>
+              </div>
+              <img id="resImg" alt="Foto del round" class="w-full h-36 object-cover rounded-2xl border border-slate-200">
+            </div>
+          </div>
+
+          <div id="aiCard" class="p-6 rounded-3xl bg-white border border-slate-200">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <h3 class="font-bold">Come ha ragionato l'IA</h3>
+              <span id="aiMeta" class="text-xs text-slate-400"></span>
+            </div>
+            <p id="aiPlace" class="mt-3 text-sm font-semibold text-rose-700"></p>
+            <p id="aiReasoning" class="mt-2 text-sm text-slate-700 leading-relaxed"></p>
+            <div id="aiCluesWrap" class="mt-4">
+              <p class="text-xs font-semibold text-slate-400 uppercase">Indizi individuati</p>
+              <div id="aiCluesList" class="mt-2 flex flex-wrap gap-2"></div>
+            </div>
+            <div id="aiSearchWrap" class="mt-4">
+              <p class="text-xs font-semibold text-slate-400 uppercase">Ricerche sulle mappe</p>
+              <ul id="aiSearchList" class="mt-2 space-y-1 text-sm text-slate-600 font-mono"></ul>
+            </div>
+          </div>
+
+          <div class="p-6 rounded-3xl bg-white border border-slate-200">
+            <h3 class="font-bold">Tutti i guess della squadra</h3>
+            <div class="mt-4 overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead class="text-left text-slate-400 text-xs uppercase">
+                  <tr><th class="py-2 pr-4">#</th><th class="py-2 pr-4">Giocatore</th><th class="py-2 pr-4 text-right">Distanza</th><th class="py-2 text-right">Punti</th></tr>
+                </thead>
+                <tbody id="resTable" class="divide-y divide-slate-100"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Classifica finale -->
+        <div id="gFinal" class="hidden space-y-6">
+          <div id="finHero" class="p-8 sm:p-12 rounded-3xl text-center">
+            <p class="text-sm font-semibold uppercase tracking-wider opacity-80">Classifica finale</p>
+            <h2 id="finTitle" class="mt-3 text-3xl sm:text-5xl font-extrabold tracking-tight"></h2>
+            <div class="mt-8 flex items-center justify-center gap-4 sm:gap-10">
+              <div><p class="text-sm opacity-80">Squadra Umani</p><p id="finHum" class="text-4xl sm:text-5xl font-extrabold tabular-nums"></p></div>
+              <span class="text-2xl opacity-50">vs</span>
+              <div><p class="text-sm opacity-80">IA</p><p id="finAi" class="text-4xl sm:text-5xl font-extrabold tabular-nums"></p></div>
+            </div>
+            <p id="finMvp" class="mt-8 text-sm"></p>
+          </div>
+
+          <div class="p-6 rounded-3xl bg-white border border-slate-200">
+            <h3 class="font-bold">Riepilogo dei round</h3>
+            <div class="mt-4 overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead class="text-left text-slate-400 text-xs uppercase">
+                  <tr><th class="py-2 pr-4">Round</th><th class="py-2 pr-4">Miglior umano</th><th class="py-2 pr-4 text-right">Umani</th><th class="py-2 pr-4 text-right">IA</th><th class="py-2 text-right">Esito</th></tr>
+                </thead>
+                <tbody id="finTable" class="divide-y divide-slate-100"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap gap-3">
+            <button id="btnRestart" class="host-only px-6 py-3 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition">Nuova partita</button>
+            <a href="#difesa" class="px-6 py-3 rounded-xl border border-slate-300 font-semibold hover:bg-white transition">Vai alla check-list di difesa</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="border-t border-slate-200 bg-white">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-6 text-xs text-slate-400 flex flex-wrap justify-between gap-2">
+      <span>Cyber OSINT Lab · percorso formativo sulla sicurezza informatica</span>
+      <span>Mappe © OpenStreetMap contributors</span>
+    </div>
+  </footer>
+
+  <!-- Toast -->
+  <div id="toast" class="hidden fixed top-20 left-1/2 -translate-x-1/2 z-[1200] max-w-[calc(100%-2rem)] px-4 py-3 rounded-xl bg-slate-900 text-white text-sm shadow-xl"></div>
+
+<script>
+(() => {
+  'use strict';
+
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const show = (el, on) => (typeof el === 'string' ? $(el) : el).classList.toggle('hidden', !on);
+  const fmtInt = (n) => Math.round(n).toLocaleString('it-IT');
+  const fmtDist = (m) => {
+    if (m === null || m === undefined) return '—';
+    if (m < 1000) return `${Math.round(m)} m`;
+    const km = m / 1000;
+    return `${km < 100 ? km.toLocaleString('it-IT', { maximumFractionDigits: 1 }) : fmtInt(km)} km`;
+  };
+  const initials = (n) => n.trim().split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+
+  let toastTimer;
+  function toast(msg) {
+    const t = $('toast');
+    t.textContent = msg;
+    show(t, true);
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => show(t, false), 4200);
+  }
+
+  /* ============================================================ TABS */
+  const TABS = ['killchain', 'trappole', 'falsi', 'difesa', 'gioco'];
+  const onTabShown = {};
+
+  function showTab(id) {
+    if (!TABS.includes(id)) id = TABS[0];
+    document.querySelectorAll('.tab-panel').forEach((p) => {
+      const active = p.id === id;
+      p.classList.toggle('hidden', !active);
+      p.classList.toggle('is-active', active);
+    });
+    document.querySelectorAll('.nav-tab').forEach((b) => {
+      const active = b.dataset.target === id;
+      b.classList.toggle('is-active', active);
+      b.setAttribute('aria-selected', active);
+      if (active) {
+        // scorre solo la barra dei tab (mobile), mai la pagina
+        const nav = b.closest('nav');
+        const nr = nav.getBoundingClientRect();
+        const br = b.getBoundingClientRect();
+        if (br.left < nr.left || br.right > nr.right) nav.scrollLeft += br.left - nr.left - 16;
+      }
+    });
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    if (onTabShown[id]) onTabShown[id]();
+  }
+
+  document.querySelectorAll('.nav-tab').forEach((b) =>
+    b.addEventListener('click', () => {
+      if (location.hash === '#' + b.dataset.target) showTab(b.dataset.target);
+      else location.hash = b.dataset.target;
+    })
+  );
+  window.addEventListener('hashchange', () => showTab(location.hash.slice(1)));
+
+  /* ======================================================= CHECKLIST */
+  const CHECK_KEY = 'cyberosint.checklist';
+  const boxes = [...document.querySelectorAll('#checklist input[type=checkbox]')];
+  function loadChecks() {
+    try { return JSON.parse(localStorage.getItem(CHECK_KEY)) || {}; } catch { return {}; }
+  }
+  function saveChecks() {
+    const data = {};
+    boxes.forEach((b) => (data[b.dataset.key] = b.checked));
+    try { localStorage.setItem(CHECK_KEY, JSON.stringify(data)); } catch { /* storage non disponibile */ }
+  }
+  function updateChecks() {
+    const done = boxes.filter((b) => b.checked).length;
+    $('checkLabel').textContent = `${done} di ${boxes.length} completate`;
+    $('checkBar').style.width = `${(done / boxes.length) * 100}%`;
+    show('checkDone', done === boxes.length);
+  }
+  const saved = loadChecks();
+  boxes.forEach((b) => {
+    b.checked = !!saved[b.dataset.key];
+    b.addEventListener('change', () => { saveChecks(); updateChecks(); });
+  });
+  $('checkReset').addEventListener('click', () => {
+    boxes.forEach((b) => (b.checked = false));
+    saveChecks();
+    updateChecks();
+  });
+  updateChecks();
+
+  /* ============================================================ MAPPE */
+  function makeMap(el) {
+    const m = L.map(el, { worldCopyJump: true, minZoom: 1 }).setView([30, 10], 2);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap',
+    }).addTo(m);
+    return m;
+  }
+  function dotIcon(color, label, extra) {
+    return L.divIcon({
+      className: '',
+      html: `<div class="dot ${extra || ''}" style="--c:${color}">${esc(label || '')}</div>`,
+      iconSize: [26, 26],
+      iconAnchor: [13, 13],
+    });
+  }
+  const refresh = (m) => m && setTimeout(() => m.invalidateSize(), 60);
+
+  /* ======================================================= EXIF / IMG */
+  function parseExif(buf) {
+    const out = {};
+    try {
+      const v = new DataView(buf);
+      if (v.getUint16(0) !== 0xffd8) return out;
+      let off = 2;
+      while (off + 4 <= v.byteLength) {
+        const marker = v.getUint16(off);
+        if ((marker & 0xff00) !== 0xff00 || marker === 0xffda) break;
+        const size = v.getUint16(off + 2);
+        if (marker === 0xffe1 && v.getUint32(off + 4) === 0x45786966) return readTiff(v, off + 10, out);
+        off += 2 + size;
+      }
+    } catch { /* EXIF assente o malformato */ }
+    return out;
+  }
+  function readTiff(v, t, out) {
+    const le = v.getUint16(t) === 0x4949;
+    const u16 = (o) => v.getUint16(o, le);
+    const u32 = (o) => v.getUint32(o, le);
+    const readIfd = (start) => {
+      const tags = {};
+      const n = u16(start);
+      for (let i = 0; i < n; i++) {
+        const e = start + 2 + i * 12;
+        tags[u16(e)] = { count: u32(e + 4), valOff: e + 8 };
+      }
+      return tags;
+    };
+    const ascii = (tag) => {
+      const o = tag.count > 4 ? t + u32(tag.valOff) : tag.valOff;
+      let s = '';
+      for (let i = 0; i < tag.count; i++) {
+        const c = v.getUint8(o + i);
+        if (!c) break;
+        s += String.fromCharCode(c);
+      }
+      return s.trim();
+    };
+    const rationals = (tag) => {
+      const o = t + u32(tag.valOff);
+      const r = [];
+      for (let i = 0; i < tag.count; i++) {
+        const num = u32(o + i * 8);
+        const den = u32(o + i * 8 + 4);
+        r.push(den ? num / den : 0);
+      }
+      return r;
+    };
+    const ifd0 = readIfd(t + u32(t + 4));
+    if (ifd0[0x010f]) out.make = ascii(ifd0[0x010f]);
+    if (ifd0[0x0110]) out.model = ascii(ifd0[0x0110]);
+    if (ifd0[0x8825]) {
+      const g = readIfd(t + u32(ifd0[0x8825].valOff));
+      if (g[2] && g[4]) {
+        const la = rationals(g[2]);
+        const lo = rationals(g[4]);
+        let lat = la[0] + (la[1] || 0) / 60 + (la[2] || 0) / 3600;
+        let lng = lo[0] + (lo[1] || 0) / 60 + (lo[2] || 0) / 3600;
+        if (g[1] && String.fromCharCode(v.getUint8(g[1].valOff)) === 'S') lat = -lat;
+        if (g[3] && String.fromCharCode(v.getUint8(g[3].valOff)) === 'W') lng = -lng;
+        if (isFinite(lat) && isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && !(lat === 0 && lng === 0)) {
+          out.gps = { lat, lng };
+        }
+      }
+    }
+    return out;
+  }
+  // Ridimensiona e ri-codifica: il canvas non conserva i metadati EXIF
+  function reencode(file) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        const k = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+        const c = document.createElement('canvas');
+        c.width = Math.round(img.naturalWidth * k);
+        c.height = Math.round(img.naturalHeight * k);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        resolve(c.toDataURL('image/jpeg', 0.85));
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error(`Impossibile leggere ${file.name}`));
+      };
+      img.src = url;
+    });
+  }
+
+  /* ============================================================ GIOCO */
+  const G = {
+    ws: null,
+    me: null,
+    room: null,
+    hostImages: {},   // id -> { dataUrl, exif }  (solo host)
+    imageCache: {},   // id -> dataUrl del round
+    selectedImage: null,
+    pending: null,
+    sent: false,
+    maps: {},
+    resultKey: null,
+    resultLayer: null,
+  };
+
+  const isFile = location.protocol === 'file:';
+  const wsUrl = () => (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host;
+
+  function connect() {
+    return new Promise((resolve, reject) => {
+      if (G.ws && G.ws.readyState === 1) return resolve();
+      const ws = new WebSocket(wsUrl());
+      G.ws = ws;
+      ws.onopen = () => resolve();
+      ws.onerror = () => reject(new Error('Impossibile connettersi al server di gioco.'));
+      ws.onmessage = (e) => {
+        try { onMessage(JSON.parse(e.data)); } catch (err) { console.error(err); }
+      };
+      ws.onclose = () => {
+        if (G.ws !== ws) return;
+        G.ws = null;
+        if (G.room) {
+          toast('Connessione al server persa.');
+          leaveLocal();
+        }
+      };
+    });
+  }
+  function send(msg) {
+    if (G.ws && G.ws.readyState === 1) G.ws.send(JSON.stringify(msg));
+    else toast('Non sei connesso al server.');
+  }
+
+  function onMessage(m) {
+    switch (m.t) {
+      case 'joined':
+        G.me = m.you;
+        show('entryError', false);
+        break;
+      case 'state':
+        G.room = m;
+        render();
+        break;
+      case 'round':
+        G.imageCache[m.imageId] = m.dataUrl;
+        G.pending = null;
+        G.sent = false;
+        if (G.maps.guessMarker) { G.maps.guessMarker.remove(); G.maps.guessMarker = null; }
+        if (G.maps.guess) G.maps.guess.setView([30, 10], 2);
+        break;
+      case 'error':
+        if (m.context === 'entry') {
+          $('entryError').textContent = m.message;
+          show('entryError', true);
+        }
+        toast(m.message);
+        break;
+      case 'closed':
+        toast(m.reason || 'Stanza chiusa.');
+        leaveLocal();
+        break;
+    }
+  }
+
+  function leaveLocal() {
+    G.room = null;
+    G.me = null;
+    G.hostImages = {};
+    G.selectedImage = null;
+    G.resultKey = null;
+    render();
+  }
+
+  /* ---------- ingresso ---------- */
+  $('cGen').addEventListener('click', () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    $('cCode').value = Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  });
+  async function enter(type, code, name, btn) {
+    show('entryError', false);
+    btn.disabled = true;
+    try {
+      await connect();
+      send({ t: type, code, name });
+    } catch (err) {
+      $('entryError').textContent = err.message + ' Verifica che il server sia avviato.';
+      show('entryError', true);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+  $('formCreate').addEventListener('submit', (e) => {
+    e.preventDefault();
+    enter('create', $('cCode').value.trim(), $('cName').value.trim(), e.submitter || e.target.querySelector('button:not([type])'));
+  });
+  $('formJoin').addEventListener('submit', (e) => {
+    e.preventDefault();
+    enter('join', $('jCode').value.trim(), $('jName').value.trim(), e.submitter || e.target.querySelector('button:not([type])'));
+  });
+  $('btnLeave').addEventListener('click', () => {
+    if (!confirm(G.me && G.me.isHost ? 'Uscendo chiuderai la stanza per tutti. Continuare?' : 'Vuoi uscire dalla stanza?')) return;
+    send({ t: 'leave' });
+    leaveLocal();
+  });
+
+  /* ---------- lobby host ---------- */
+  $('fileInput').addEventListener('change', async (e) => {
+    const files = [...e.target.files];
+    e.target.value = '';
+    if (!files.length) return;
+    show('lUploading', true);
+    for (const f of files) {
+      try {
+        const exif = parseExif(await f.arrayBuffer());
+        const dataUrl = await reencode(f);
+        const id = 'i' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+        G.hostImages[id] = { dataUrl, exif };
+        send({ t: 'addImage', id, name: f.name, dataUrl, lat: exif.gps ? exif.gps.lat : null, lng: exif.gps ? exif.gps.lng : null });
+        if (exif.gps) toast(`📍 "${f.name}": i metadati EXIF rivelavano già la posizione!`);
+        else if (!G.selectedImage) G.selectedImage = id;
+      } catch (err) {
+        toast(err.message);
+      }
+    }
+    show('lUploading', false);
+  });
+
+  $('lImages').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    const id = btn.dataset.id;
+    if (btn.dataset.act === 'del') {
+      send({ t: 'removeImage', id });
+      delete G.hostImages[id];
+      if (G.selectedImage === id) G.selectedImage = null;
+    } else {
+      G.selectedImage = id;
+      renderLobby(G.room);
+      const img = G.room.images.find((i) => i.id === id);
+      if (img && img.lat !== null && G.maps.place) G.maps.place.setView([img.lat, img.lng], Math.max(G.maps.place.getZoom(), 12));
+      $('placeMap').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  });
+
+  function sendSettings() {
+    send({ t: 'settings', rounds: Number($('sRounds').value), scale: $('sScale').value, aiTools: $('sAiTools').checked });
+  }
+  ['sRounds', 'sScale', 'sAiTools'].forEach((id) => $(id).addEventListener('change', sendSettings));
+  $('btnStart').addEventListener('click', () => send({ t: 'start' }));
+
+  function ensurePlaceMap() {
+    if (G.maps.place) return refresh(G.maps.place);
+    G.maps.place = makeMap($('placeMap'));
+    G.maps.place.on('click', (e) => {
+      if (!G.selectedImage) return toast('Seleziona prima una foto dall\'elenco.');
+      const ll = e.latlng.wrap();
+      send({ t: 'setImageLocation', id: G.selectedImage, lat: ll.lat, lng: ll.lng });
+    });
+  }
+
+  /* ---------- round ---------- */
+  function ensureGuessMap() {
+    if (G.maps.guess) return refresh(G.maps.guess);
+    G.maps.guess = makeMap($('guessMap'));
+    G.maps.guess.on('click', (e) => {
+      if (G.sent || iGuessed()) return;
+      G.pending = e.latlng.wrap();
+      if (G.maps.guessMarker) G.maps.guessMarker.setLatLng(e.latlng);
+      else G.maps.guessMarker = L.marker(e.latlng, { icon: dotIcon('#4f46e5', '', 'me') }).addTo(G.maps.guess);
+      updateGuessButton();
+    });
+  }
+  const iGuessed = () => !!(G.room && G.me && G.room.players.some((p) => p.id === G.me.id && p.guessed));
+
+  function updateGuessButton() {
+    const b = $('btnGuess');
+    const r = G.room;
+    if (iGuessed() || G.sent) {
+      const n = r ? r.players.filter((p) => p.guessed).length : 0;
+      b.disabled = true;
+      b.textContent = `Guess inviato ✓ (${n}/${r ? r.players.length : 0})`;
+    } else if (G.pending) {
+      b.disabled = false;
+      b.textContent = 'Conferma guess';
+    } else {
+      b.disabled = true;
+      b.textContent = 'Clicca sulla mappa';
+    }
+  }
+
+  $('btnGuess').addEventListener('click', () => {
+    if (!G.pending || G.sent) return;
+    G.sent = true;
+    send({ t: 'guess', lat: G.pending.lat, lng: G.pending.lng });
+    updateGuessButton();
+  });
+  $('btnReveal').addEventListener('click', () => {
+    const r = G.room;
+    if (r && !r.players.some((p) => p.guessed) && !confirm('Nessun giocatore ha ancora risposto. Rivelare comunque?')) return;
+    send({ t: 'reveal' });
+  });
+
+  // Mappa in basso a destra: si ingrandisce al passaggio (desktop) o con il pulsante
+  const box = $('guessBox');
+  let pinned = false;
+  const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+  if (finePointer) {
+    box.addEventListener('mouseenter', () => box.classList.add('expanded'));
+    box.addEventListener('mouseleave', () => { if (!pinned) box.classList.remove('expanded'); });
+  }
+  $('btnExpand').addEventListener('click', () => {
+    pinned = !pinned;
+    box.classList.toggle('expanded', pinned);
+  });
+  box.addEventListener('transitionend', (e) => {
+    if (e.target === box && G.maps.guess) G.maps.guess.invalidateSize();
+  });
+
+  $('btnFull').addEventListener('click', () => {
+    const st = $('stage');
+    if (document.fullscreenElement) document.exitFullscreen();
+    else if (st.requestFullscreen) st.requestFullscreen().catch(() => toast('Schermo intero non disponibile.'));
+  });
+  document.addEventListener('fullscreenchange', () => refresh(G.maps.guess));
+
+  function aiStatusLabel(s) {
+    if (!s) return '';
+    if (s.status === 'thinking') return 'Sta osservando la foto…';
+    if (s.status === 'searching') return `Sta consultando le mappe (${s.searches} ${s.searches === 1 ? 'ricerca' : 'ricerche'})…`;
+    if (s.status === 'done') return 'Ha dato la sua risposta ✓';
+    if (s.status === 'error') return 'Non disponibile in questo round';
+    return '';
+  }
+
+  /* ---------- risultati / finale ---------- */
+  $('btnRevealNow').addEventListener('click', () => send({ t: 'revealNow' }));
+  $('btnNext').addEventListener('click', () => send({ t: 'next' }));
+  $('btnRestart').addEventListener('click', () => send({ t: 'restart' }));
+
+  /* ============================================================ RENDER */
+  const VIEWS = { lobby: 'gLobby', select: 'gSelect', round: 'gRound', waiting_ai: 'gWait', result: 'gResult', final: 'gFinal' };
+
+  function render() {
+    const r = G.room;
+    const isHost = !!(G.me && G.me.isHost);
+
+    show('gNoServer', isFile && !r);
+    show('gEntry', !r && !isFile);
+    show('gHeader', !!r);
+    Object.entries(VIEWS).forEach(([phase, id]) => show(id, !!r && r.phase === phase));
+    document.querySelectorAll('#gioco .host-only').forEach((el) => show(el, isHost));
+    document.querySelectorAll('#gioco .player-only').forEach((el) => show(el, !!r && !isHost));
+
+    if (!r) return;
+
+    renderHeader(r, isHost);
+    if (r.phase === 'lobby') renderLobby(r);
+    else if (r.phase === 'select') renderSelect(r);
+    else if (r.phase === 'round') renderRound(r);
+    else if (r.phase === 'waiting_ai') $('waitText').textContent = `${aiStatusLabel(r.aiStatus)} I guess della squadra sono chiusi: i risultati arrivano appena l'IA risponde.`;
+    else if (r.phase === 'result') renderResult(r);
+    else if (r.phase === 'final') renderFinal(r);
+  }
+
+  function renderHeader(r, isHost) {
+    $('hCode').textContent = r.code;
+    $('hRole').textContent = isHost ? 'Sei l\'host' : `Giocatore: ${G.me ? G.me.name : ''}`;
+    $('hPlayers').textContent = `${r.players.length}/${r.maxPlayers} giocatori`;
+    const inGame = r.phase !== 'lobby';
+    show('hRoundWrap', inGame);
+    show('hScore', inGame);
+    $('hRound').textContent = `${Math.max(r.round, 1)}/${r.totalRounds}`;
+    $('hHum').textContent = fmtInt(r.totals.humans);
+    $('hAi').textContent = fmtInt(r.totals.ai);
+  }
+
+  function playerItem(p) {
+    const me = G.me && p.id === G.me.id;
+    return `<li class="flex items-center gap-3 p-2 rounded-xl ${me ? 'bg-indigo-50' : ''}">
+      <span class="w-8 h-8 rounded-full bg-slate-100 text-slate-600 grid place-items-center text-xs font-bold">${esc(initials(p.name))}</span>
+      <span class="text-sm font-medium truncate">${esc(p.name)}${me ? ' <span class="text-indigo-600 font-normal">(tu)</span>' : ''}</span>
+    </li>`;
+  }
+
+  function renderLobby(r) {
+    $('lCount').textContent = `${r.players.length}/${r.maxPlayers}`;
+    $('lHost').textContent = r.hostName;
+    $('lPlayers').innerHTML = r.players.map(playerItem).join('');
+    show('lEmpty', r.players.length === 0);
+
+    if (!G.me || !G.me.isHost) return;
+
+    // Foto
+    $('lLocated').textContent = r.locatedCount;
+    $('lImgCount').textContent = r.imageCount;
+    show('lNoImages', r.images.length === 0);
+    if (G.selectedImage && !r.images.some((i) => i.id === G.selectedImage)) G.selectedImage = null;
+    if (!G.selectedImage) {
+      const missing = r.images.find((i) => i.lat === null);
+      if (missing) G.selectedImage = missing.id;
+    }
+    $('lImages').innerHTML = r.images.map((img) => {
+      const local = G.hostImages[img.id] || {};
+      const exif = local.exif || {};
+      const sel = img.id === G.selectedImage;
+      const device = [exif.make, exif.model].filter(Boolean).join(' ');
+      return `<div class="flex gap-3 p-3 rounded-2xl border ${sel ? 'border-indigo-400 ring-2 ring-indigo-100' : 'border-slate-200'}">
+        <img src="${local.dataUrl || ''}" alt="" class="w-20 h-20 rounded-xl object-cover bg-slate-100 shrink-0">
+        <div class="min-w-0 flex-1 text-xs">
+          <p class="text-sm font-medium truncate" title="${esc(img.name)}">${esc(img.name)}</p>
+          ${img.lat !== null
+            ? `<p class="mt-1 text-emerald-700">● ${img.lat.toFixed(5)}, ${img.lng.toFixed(5)}</p>`
+            : '<p class="mt-1 text-amber-600">● Posizione da impostare</p>'}
+          ${exif.gps ? `<p class="mt-1 text-indigo-700">📍 GPS letto dai metadati EXIF${device ? ` · ${esc(device)}` : ''}</p>` : ''}
+          <p class="mt-1 text-slate-400">Metadati rimossi prima dell'invio ✓</p>
+          <div class="mt-2 flex gap-3">
+            <button data-act="sel" data-id="${esc(img.id)}" class="font-semibold text-indigo-600 hover:underline">${sel ? 'Selezionata' : 'Posiziona'}</button>
+            <button data-act="del" data-id="${esc(img.id)}" class="text-slate-400 hover:text-rose-600">Rimuovi</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+
+    // Mappa di posizionamento
+    ensurePlaceMap();
+    const selImg = r.images.find((i) => i.id === G.selectedImage);
+    $('lSelName').textContent = selImg ? selImg.name : 'nessuna';
+    if (G.maps.placeMarker) { G.maps.placeMarker.remove(); G.maps.placeMarker = null; }
+    if (selImg && selImg.lat !== null) {
+      G.maps.placeMarker = L.marker([selImg.lat, selImg.lng], { icon: dotIcon('#10b981', '★') }).addTo(G.maps.place);
+    }
+
+    // Impostazioni (non sovrascrivere mentre l'host sta scrivendo)
+    if (document.activeElement !== $('sRounds')) $('sRounds').value = r.settings.rounds;
+    $('sScale').value = r.settings.scale;
+    $('sAiTools').checked = !!r.settings.aiTools;
+    show('aiWarn', !r.aiAvailable);
+
+    let hint = '';
+    if (r.players.length < 1) hint = 'Serve almeno un giocatore collegato.';
+    else if (r.locatedCount < r.settings.rounds) hint = `Servono ${r.settings.rounds} foto con posizione (ora ${r.locatedCount}).`;
+    else hint = `Pronti: ${r.players.length} giocatori, ${r.settings.rounds} round.`;
+    $('btnStart').disabled = r.players.length < 1 || r.locatedCount < r.settings.rounds;
+    $('startHint').textContent = hint;
+  }
+
+  function renderSelect(r) {
+    document.querySelectorAll('.selRound').forEach((el) => (el.textContent = `${r.round + 1}/${r.totalRounds}`));
+    if (!G.me || !G.me.isHost) return;
+    const avail = r.images.filter((i) => i.lat !== null && !i.used);
+    $('selGrid').innerHTML = avail.map((img) => {
+      const local = G.hostImages[img.id] || {};
+      return `<button data-id="${esc(img.id)}" class="group text-left rounded-2xl overflow-hidden border border-slate-200 hover:border-indigo-400 hover:shadow-lg transition">
+        <img src="${local.dataUrl || ''}" alt="" class="w-full aspect-[4/3] object-cover bg-slate-100 group-hover:scale-[1.02] transition">
+        <p class="px-3 py-2 text-xs font-medium truncate">${esc(img.name)}</p>
+      </button>`;
+    }).join('') || '<p class="text-sm text-slate-500">Nessuna foto disponibile.</p>';
+  }
+  $('selGrid').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-id]');
+    if (b) send({ t: 'selectImage', id: b.dataset.id });
+  });
+
+  function renderRound(r) {
+    const src = G.imageCache[r.currentImageId];
+    if (src && $('roundImg').getAttribute('src') !== src) $('roundImg').src = src;
+    $('rRound').textContent = `${r.round}/${r.totalRounds}`;
+    const n = r.players.filter((p) => p.guessed).length;
+    $('rCount').textContent = `${n}/${r.players.length} hanno risposto`;
+    $('aiStatusText').textContent = aiStatusLabel(r.aiStatus);
+    const busy = !!r.aiStatus && (r.aiStatus.status === 'thinking' || r.aiStatus.status === 'searching');
+    $('aiPulse').style.visibility = busy ? 'visible' : 'hidden';
+
+    if (G.me && G.me.isHost) {
+      $('rPlayers').innerHTML = r.players.map((p) => `<li class="flex items-center justify-between gap-2">
+        <span class="truncate">${esc(p.name)}</span>
+        ${p.guessed ? '<span class="text-emerald-600 text-xs font-semibold">✓ inviato</span>' : '<span class="text-slate-400 text-xs">in attesa</span>'}
+      </li>`).join('') || '<li class="text-slate-400">Nessun giocatore</li>';
+    } else {
+      ensureGuessMap();
+      updateGuessButton();
+    }
+  }
+
+  function renderResult(r) {
+    const res = r.result;
+    if (!res) return;
+    const isLast = r.round >= r.totalRounds;
+    $('btnNext').textContent = isLast ? 'Classifica finale' : 'Prossimo round';
+    $('resRound').textContent = `${res.round}/${r.totalRounds}`;
+    $('resVerdict').textContent = res.winner === 'humans' ? 'vincono gli Umani' : res.winner === 'ai' ? 'vince l\'IA' : 'pareggio';
+    $('resVerdict').className = res.winner === 'humans' ? 'text-indigo-600' : res.winner === 'ai' ? 'text-rose-600' : 'text-slate-500';
+
+    $('resHumScore').textContent = fmtInt(res.humansScore);
+    $('resHumInfo').textContent = res.best
+      ? `Miglior player: ${res.best.name} · ${fmtDist(res.best.dist)}`
+      : 'Nessun guess inviato dalla squadra.';
+    $('resAiScore').textContent = fmtInt(res.ai.score);
+    $('resAiInfo').textContent = res.ai.error
+      ? `IA non disponibile: ${res.ai.error}`
+      : `Guess dell'IA a ${fmtDist(res.ai.dist)} · confidenza ${res.ai.confidence}%`;
+
+    // Ragionamento dell'IA (rivelato solo ora)
+    show('aiCard', !res.ai.error);
+    if (!res.ai.error) {
+      $('aiMeta').textContent = res.ai.model ? `modello: ${res.ai.model}` : '';
+      $('aiPlace').textContent = res.ai.place ? `Ipotesi: ${res.ai.place}` : '';
+      $('aiReasoning').textContent = res.ai.reasoning || '';
+      const clues = res.ai.clues || [];
+      show('aiCluesWrap', clues.length > 0);
+      $('aiCluesList').innerHTML = clues.map((c) => `<span class="px-2.5 py-1 rounded-full bg-rose-50 text-rose-800 text-xs">${esc(c)}</span>`).join('');
+      const searches = res.ai.searches || [];
+      show('aiSearchWrap', searches.length > 0);
+      $('aiSearchList').innerHTML = searches.map((s) => `<li>› ${s.tool === 'search_nearby' ? 'nei dintorni' : 'cerca'}: "${esc(s.query)}" <span class="text-slate-400">(${s.results} risultati)</span></li>`).join('');
+    }
+    $('cardHum').className = `p-5 rounded-3xl border-2 bg-white ${res.winner === 'humans' ? 'border-indigo-500' : 'border-slate-200'}`;
+    $('cardAi').className = `p-5 rounded-3xl border-2 bg-white ${res.winner === 'ai' ? 'border-rose-500' : 'border-slate-200'}`;
+    show($('cardHum').querySelector('.winBadge'), res.winner === 'humans');
+    show($('cardAi').querySelector('.winBadge'), res.winner === 'ai');
+
+    const src = G.imageCache[res.imageId] || (G.hostImages[res.imageId] || {}).dataUrl;
+    show('resImg', !!src);
+    if (src) $('resImg').src = src;
+
+    $('resTable').innerHTML = res.guesses.map((g, i) => {
+      const me = G.me && g.id === G.me.id;
+      return `<tr class="${me ? 'bg-indigo-50/60' : ''}">
+        <td class="py-2.5 pr-4 text-slate-400">${i + 1}</td>
+        <td class="py-2.5 pr-4 font-medium">${esc(g.name)}${i === 0 ? ' <span class="ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-600 text-white">MIGLIORE</span>' : ''}${me ? ' <span class="text-indigo-600 font-normal">(tu)</span>' : ''}</td>
+        <td class="py-2.5 pr-4 text-right tabular-nums">${fmtDist(g.dist)}</td>
+        <td class="py-2.5 text-right tabular-nums font-semibold">${fmtInt(g.score)}</td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="4" class="py-3 text-slate-400">Nessun guess in questo round.</td></tr>';
+
+    // Mappa dei risultati
+    if (!G.maps.result) G.maps.result = makeMap($('resultMap'));
+    const map = G.maps.result;
+    refresh(map);
+    const key = `${r.code}:${res.round}:${res.guesses.length}`;
+    if (G.resultKey === key) return;
+    G.resultKey = key;
+    if (G.resultLayer) G.resultLayer.remove();
+    const layer = L.layerGroup().addTo(map);
+    G.resultLayer = layer;
+
+    const truth = [res.truth.lat, res.truth.lng];
+    const pts = [truth];
+    res.guesses.slice().reverse().forEach((g) => {
+      const best = res.best && g.id === res.best.id;
+      const me = G.me && g.id === G.me.id;
+      const color = best ? '#4f46e5' : '#94a3b8';
+      L.polyline([truth, [g.lat, g.lng]], { color, weight: best ? 3 : 1.5, dashArray: best ? null : '4 6', opacity: 0.9 }).addTo(layer);
+      L.marker([g.lat, g.lng], { icon: dotIcon(color, initials(g.name), me ? 'me' : ''), zIndexOffset: best ? 500 : 0 })
+        .bindTooltip(`${esc(g.name)} · ${fmtDist(g.dist)} · ${fmtInt(g.score)} pt`)
+        .addTo(layer);
+      pts.push([g.lat, g.lng]);
+    });
+    if (res.ai.lat !== null) {
+      L.polyline([truth, [res.ai.lat, res.ai.lng]], { color: '#e11d48', weight: 3, dashArray: '8 6' }).addTo(layer);
+      L.marker([res.ai.lat, res.ai.lng], { icon: dotIcon('#e11d48', 'IA'), zIndexOffset: 600 })
+        .bindTooltip(`IA · ${fmtDist(res.ai.dist)} · ${fmtInt(res.ai.score)} pt`)
+        .addTo(layer);
+      pts.push([res.ai.lat, res.ai.lng]);
+    }
+    L.marker(truth, { icon: dotIcon('#10b981', '★'), zIndexOffset: 1000 }).bindTooltip('Posizione reale').addTo(layer);
+
+    setTimeout(() => {
+      map.invalidateSize();
+      map.fitBounds(L.latLngBounds(pts), { padding: [40, 40], maxZoom: 16 });
+    }, 80);
+  }
+
+  function renderFinal(r) {
+    const f = r.final;
+    if (!f) return;
+    const hero = $('finHero');
+    if (f.winner === 'humans') {
+      hero.className = 'p-8 sm:p-12 rounded-3xl text-center bg-indigo-600 text-white';
+      $('finTitle').textContent = 'Vittoria della Squadra Umani!';
+    } else if (f.winner === 'ai') {
+      hero.className = 'p-8 sm:p-12 rounded-3xl text-center bg-rose-600 text-white';
+      $('finTitle').textContent = 'Vince l\'Intelligenza Artificiale';
+    } else {
+      hero.className = 'p-8 sm:p-12 rounded-3xl text-center bg-slate-800 text-white';
+      $('finTitle').textContent = 'Pareggio perfetto';
+    }
+    $('finHum').textContent = fmtInt(f.humansTotal);
+    $('finAi').textContent = fmtInt(f.aiTotal);
+    $('finMvp').innerHTML = f.mvp
+      ? `MVP della squadra: <strong>${esc(f.mvp.name)}</strong> · miglior player in ${f.mvp.rounds} round su ${f.rounds.length}`
+      : '';
+    $('finTable').innerHTML = f.rounds.map((h) => `<tr>
+      <td class="py-2.5 pr-4 text-slate-400">${h.round}</td>
+      <td class="py-2.5 pr-4 font-medium">${h.best ? `${esc(h.best.name)} <span class="text-slate-400 font-normal">· ${fmtDist(h.best.dist)}</span>` : '<span class="text-slate-400">—</span>'}</td>
+      <td class="py-2.5 pr-4 text-right tabular-nums">${fmtInt(h.humansScore)}</td>
+      <td class="py-2.5 pr-4 text-right tabular-nums">${fmtInt(h.ai.score)} <span class="text-slate-400">· ${fmtDist(h.ai.dist)}</span></td>
+      <td class="py-2.5 text-right font-semibold ${h.winner === 'humans' ? 'text-indigo-600' : h.winner === 'ai' ? 'text-rose-600' : 'text-slate-500'}">${h.winner === 'humans' ? 'Umani' : h.winner === 'ai' ? 'IA' : 'Pari'}</td>
+    </tr>`).join('');
+  }
+
+  // Le mappe Leaflet vanno ricalcolate quando il tab torna visibile
+  onTabShown.gioco = () => {
+    render();
+    Object.values(G.maps).forEach((m) => m && m.invalidateSize && refresh(m));
+  };
+
+  render();
+  showTab(location.hash.slice(1));
+})();
+</script>
+</body>
+</html>
