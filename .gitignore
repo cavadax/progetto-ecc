@@ -1,0 +1,2 @@
+# Local secrets (Gemini API key)
+.env
