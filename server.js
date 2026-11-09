@@ -12,6 +12,20 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { WebSocketServer } = require('ws');
+
+// Carica .env (se esiste) prima di ./ai, che legge le variabili al caricamento.
+// Le variabili già impostate nell'ambiente hanno la precedenza.
+function loadDotEnv(file) {
+  let text;
+  try { text = fs.readFileSync(file, 'utf8'); } catch { return; }
+  for (const line of text.split(/\r?\n/)) {
+    const m = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/);
+    if (!m || m[1] in process.env) continue;
+    process.env[m[1]] = m[2].replace(/^(['"])(.*)\1$/, '$2');
+  }
+}
+loadDotEnv(path.join(__dirname, '.env'));
+
 const ai = require('./ai');
 
 const PORT = Number(process.env.PORT) || 3000;
@@ -19,6 +33,8 @@ const MAX_PLAYERS = 30;
 const MAX_IMAGES = 30;
 const MAX_ROUNDS = 30;
 const MAX_IMAGE_CHARS = 8 * 1024 * 1024;
+// Tempo massimo di un round, uguale per giocatori e IA
+const ROUND_MS = 90 * 1000;
 
 // Distanza caratteristica del decadimento del punteggio (metri)
 const SCALES = { city: 1000, region: 50000, world: 1500000 };
@@ -75,6 +91,7 @@ function startAi(room, dataUrl) {
 
   ai.geolocate(dataUrl, {
     tools: room.settings.aiTools,
+    timeoutMs: ROUND_MS,
     onStatus: (s) => {
       if (!stillCurrent()) return;
       task.status = 'searching';
@@ -155,6 +172,9 @@ function publicState(room, forHost) {
     aiAvailable: ai.isAvailable(),
     // durante il round solo lo stato dell'IA, mai i contenuti (darebbero indizi ai giocatori)
     aiStatus: room.ai ? { status: room.ai.status, searches: room.ai.searches } : null,
+    // tempo residuo (non l'ora assoluta: gli orologi dei dispositivi non sono allineati)
+    remainingMs: room.deadline && (room.phase === 'round' || room.phase === 'waiting_ai') ? Math.max(0, room.deadline - Date.now()) : null,
+    roundMs: ROUND_MS,
     result: room.phase === 'result' || room.phase === 'final' ? room.lastResult : null,
     final: room.phase === 'final' ? room.final : null,
     totals: totals(room),
@@ -174,7 +194,14 @@ function broadcastRaw(room, msg) {
   for (const p of room.players.values()) if (p.ws.readyState === 1) p.ws.send(json);
 }
 
+function stopTimer(room) {
+  clearTimeout(room.timer);
+  room.timer = null;
+  room.deadline = null;
+}
+
 function resetGame(room) {
+  stopTimer(room);
   room.phase = 'lobby';
   room.round = 0;
   room.current = null;
@@ -194,6 +221,7 @@ function reveal(room, force) {
     broadcast(room);
     return;
   }
+  stopTimer(room);
   const truth = { lat: img.lat, lng: img.lng };
   const S = SCALES[room.settings.scale];
 
@@ -214,7 +242,12 @@ function reveal(room, force) {
     const dist = haversine(truth, r);
     aiRes = { ...r, dist, score: score(dist, S), error: null };
   } else {
-    const error = task && task.status === 'error' ? task.error : "risultati rivelati prima che l'IA rispondesse";
+    const error =
+      task && task.status === 'error'
+        ? task.error
+        : room.timedOut
+          ? `tempo scaduto: l'IA non ha risposto entro ${ROUND_MS / 1000} s`
+          : "risultati rivelati prima che l'IA rispondesse";
     aiRes = { lat: null, lng: null, dist: null, score: 0, error };
   }
   room.ai = null; // eventuale risposta tardiva verrà ignorata
@@ -282,6 +315,7 @@ function leave(ws) {
   if (!room) return;
 
   if (room.hostId === meta.id) {
+    stopTimer(room);
     for (const p of room.players.values()) {
       send(p.ws, { t: 'closed', reason: "L'host ha chiuso la stanza." });
       p.ws.meta = { id: p.ws.meta.id };
@@ -294,6 +328,34 @@ function leave(ws) {
   room.players.delete(meta.id);
   room.guesses.delete(meta.id);
   if (!maybeAutoReveal(room)) broadcast(room);
+}
+
+/* --------------------------------------------------- Link Google Maps */
+
+// I link brevi (maps.app.goo.gl) non contengono le coordinate: si seguono i redirect
+// fino all'URL completo, che poi il browser dell'host analizza. Solo domini Google.
+const MAPS_HOSTS = /^(maps\.app\.goo\.gl|goo\.gl|g\.co|consent\.google\.[a-z.]+|(www\.|maps\.)?google\.[a-z.]+)$/i;
+
+async function resolveMapsLink(raw) {
+  let url = new URL(String(raw || '').slice(0, 2000));
+  for (let hop = 0; hop < 6; hop++) {
+    if (url.protocol !== 'https:' || !MAPS_HOSTS.test(url.hostname)) throw new Error('Il link non è di Google Maps.');
+    // pagina di consenso cookie: l'URL di destinazione è nel parametro "continue"
+    if (/^consent\./i.test(url.hostname) && url.searchParams.get('continue')) {
+      url = new URL(url.searchParams.get('continue'));
+      continue;
+    }
+    if (/google\./i.test(url.hostname) && url.pathname.startsWith('/maps')) return url.href;
+    const res = await fetch(url, {
+      redirect: 'manual',
+      headers: { 'User-Agent': 'Mozilla/5.0 (CyberOSINTLab)' },
+      signal: AbortSignal.timeout(8000),
+    });
+    const loc = res.headers.get('location');
+    if (!loc || res.status < 300 || res.status >= 400) return url.href;
+    url = new URL(loc, url);
+  }
+  return url.href;
 }
 
 /* ------------------------------------------------------------- Messaggi */
@@ -315,6 +377,9 @@ const handlers = {
       images: new Map(),
       settings: { rounds: 3, scale: 'world', aiTools: true },
       ai: null,
+      timer: null,
+      deadline: null,
+      timedOut: false,
       phase: 'lobby',
       round: 0,
       current: null,
@@ -383,6 +448,17 @@ const handlers = {
     broadcast(room);
   },
 
+  async resolveMapsLink(ws, m, room) {
+    if (room.phase !== 'lobby') return;
+    try {
+      const url = await resolveMapsLink(m.url);
+      send(ws, { t: 'mapsLink', id: String(m.id || '').slice(0, 40), url });
+    } catch (e) {
+      const msg = e.name === 'TimeoutError' ? 'Google Maps non ha risposto: riprova.' : e instanceof TypeError ? 'Link non valido o Google Maps non raggiungibile.' : e.message;
+      sendError(ws, msg, 'mapsLink');
+    }
+  },
+
   removeImage(ws, m, room) {
     if (room.phase !== 'lobby') return;
     room.images.delete(m.id);
@@ -419,6 +495,14 @@ const handlers = {
     room.current = img.id;
     room.guesses.clear();
     room.phase = 'round';
+    room.timedOut = false;
+    room.deadline = Date.now() + ROUND_MS;
+    clearTimeout(room.timer);
+    room.timer = setTimeout(() => {
+      if (room.phase !== 'round' && room.phase !== 'waiting_ai') return;
+      room.timedOut = true;
+      reveal(room, true); // tempo scaduto: chi non ha risposto (IA inclusa) prende 0
+    }, ROUND_MS);
     startAi(room, img.dataUrl); // solo i pixel: niente coordinate, niente nome file
     broadcastRaw(room, { t: 'round', round: room.round, total: room.settings.rounds, imageId: img.id, dataUrl: img.dataUrl });
     broadcast(room);
@@ -456,7 +540,7 @@ const handlers = {
   },
 };
 
-const HOST_ONLY = new Set(['addImage', 'setImageLocation', 'removeImage', 'settings', 'start', 'selectImage', 'reveal', 'revealNow', 'next', 'restart']);
+const HOST_ONLY = new Set(['addImage', 'setImageLocation', 'resolveMapsLink', 'removeImage', 'settings', 'start', 'selectImage', 'reveal', 'revealNow', 'next', 'restart']);
 const PLAYER_ONLY = new Set(['guess']);
 
 wss.on('connection', (ws) => {

@@ -1,6 +1,12 @@
 # Cyber OSINT Lab
 
-SPA formativa sulla sicurezza informatica (4 moduli teorici) + gioco multiplayer cooperativo **Umani vs IA** in stile "indovina il luogo dalla foto".
+SPA formativa sulla sicurezza informatica, in 5 sezioni:
+
+1. **Digital Machine**: dalle foto pubblicate alla ricostruzione della routine di una persona.
+2. **Trappole Visive & EXIF**: elementi visibili, metadati invisibili, permanenza online.
+3. **GEOINT & IA**: come riconoscere un'immagine generata dall'IA (profili sospetti, luci, anatomia, sfondi…).
+4. **Difesa & Privacy**: check-list (GPS, EXIF, permessi delle app, pulizia visiva).
+5. **Caccia al Luogo**: gioco multiplayer cooperativo **Umani vs IA**, "indovina il luogo dalla foto".
 
 ## 1. Chiave IA gratuita (Google Gemini)
 
@@ -27,7 +33,7 @@ Opzioni (variabili d'ambiente):
 |---|---|---|
 | `GEMINI_API_KEY` | (nessuna) | chiave Gemini; senza chiave l'IA prende 0 punti |
 | `AI_MODEL` | `gemini-3.6-flash` | modello preferito (poi fallback su `gemini-3.5-flash-lite`, `gemini-3.1-flash-lite`) |
-| `AI_TIMEOUT_MS` | `180000` | tempo massimo di ragionamento dell'IA per round |
+| `AI_TIMEOUT_MS` | `180000` | tempo massimo dell'IA quando non è legata a un round (nel gioco vale il timer di 90 s) |
 | `PORT` | `3000` | porta HTTP |
 
 Il terminale mostra l'indirizzo di rete (es. `http://192.168.1.65:3000`) da aprire sui dispositivi dei giocatori.
@@ -37,14 +43,20 @@ Il terminale mostra l'indirizzo di rete (es. `http://192.168.1.65:3000`) da apri
 - Quando l'host proietta una foto, il server la invia a Gemini **senza metadati, senza nome file e senza coordinate**: l'IA vede solo i pixel, esattamente come i giocatori.
 - L'IA analizza scritte, lingua, segnaletica, architettura, vegetazione, ombre… Se l'host lascia attivo *"L'IA può consultare le mappe"*, può anche cercare su OpenStreetMap (Nominatim / Photon, gratuiti) le insegne e le vie che legge, per fissare il punto esatto.
 - Durante il round i giocatori vedono solo lo stato dell'IA (osserva / consulta le mappe / ha risposto). Ragionamento, indizi e ricerche vengono mostrati solo nei risultati.
+- L'IA ha lo stesso tempo dei giocatori: **1:30**. Se non risponde entro lo scadere prende 0 punti.
 - Se l'host rivela prima che l'IA abbia finito, la partita attende. L'host può forzare con "Rivela senza IA" (0 punti all'IA).
 
 ## Come si gioca
 
 1. **Host** → tab *5 · Gioco* → *Crea lobby* (codice stanza + username).
 2. **Giocatori** (max 30) → *Unisciti* con lo stesso codice.
-3. L'host carica le foto. Se una foto ha il GPS nei metadati EXIF, la posizione viene letta da sola (momento didattico); altrimenti la si imposta sulla mappa. Prima dell'invio le foto vengono ri-codificate e i metadati spariscono.
-4. *Start Partita* → a ogni round l'host sceglie la foto, i giocatori piazzano **un solo guess** sulla mappa in basso a destra.
+3. L'host carica le foto e ne imposta la posizione reale in uno di tre modi:
+   - **Immagine / mappa**: se la foto ha il GPS nei metadati EXIF la posizione viene letta da sola (momento didattico), altrimenti si clicca sulla mappa;
+   - **Coordinate GPS**: es. `46.0664, 11.1257` o `46.0664 N, 11.1257 E`;
+   - **Link Google Maps**: il link copiato da *Condividi* (anche quelli brevi `maps.app.goo.gl`, che il server risolve).
+
+   Prima dell'invio le foto vengono ri-codificate e i metadati spariscono.
+4. *Start Partita* → a ogni round l'host sceglie la foto, i giocatori piazzano **un solo guess** sulla mappa in basso a destra entro **1:30**. Allo scadere i risultati si rivelano da soli; un segnaposto piazzato ma non confermato viene inviato in automatico.
 5. Punteggio: 5000 punti entro 20 m, poi `5000 · e^(-(d-20)/S)` con S = scala scelta (Città 1 km, Regione 50 km, Mondo 1500 km). Per la squadra conta il miglior giocatore del round.
 
 ## File

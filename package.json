@@ -5,10 +5,10 @@
   "main": "server.js",
   "private": true,
   "scripts": {
-    "start": "node --env-file-if-exists=.env server.js"
+    "start": "node server.js"
   },
   "engines": {
-    "node": ">=22.9"
+    "node": ">=22"
   },
   "dependencies": {
     "@google/genai": "^3.0.0",

@@ -24,6 +24,11 @@ const MAX_TOOL_TURNS = 4;
 const TIMEOUT_MS = Number(process.env.AI_TIMEOUT_MS) || 180000;
 const CALL_TIMEOUT_MS = 60000; // singola richiesta: oltre, il modello è considerato bloccato
 const FINAL_RESERVE_MS = 45000; // tempo riservato per la risposta finale
+// Con budget più brevi (round da 90 s) le due soglie scalano in proporzione
+const limitsFor = (budgetMs) => ({
+  callMs: Math.min(CALL_TIMEOUT_MS, Math.round(budgetMs * 0.45)),
+  reserveMs: Math.min(FINAL_RESERVE_MS, Math.round(budgetMs * 0.3)),
+});
 
 const isAvailable = () => !!process.env.GEMINI_API_KEY;
 
@@ -215,7 +220,7 @@ function validateAnswer(args, searches, model) {
   };
 }
 
-async function runModel(model, image, useTools, onStatus, signal, deadline) {
+async function runModel(model, image, useTools, onStatus, signal, deadline, limits) {
   const ai = getClient();
   const decls = useTools ? [GEOCODE, NEARBY, SUBMIT] : [SUBMIT];
   const contents = [
@@ -236,11 +241,11 @@ async function runModel(model, image, useTools, onStatus, signal, deadline) {
 
   for (let turn = 0; turn <= MAX_TOOL_TURNS + 1; turn++) {
     const remaining = deadline - Date.now();
-    const lastTurn = !useTools || turn >= MAX_TOOL_TURNS || remaining < FINAL_RESERVE_MS;
+    const lastTurn = !useTools || turn >= MAX_TOOL_TURNS || remaining < limits.reserveMs;
     const functionCallingConfig = { mode: 'ANY' };
     if (lastTurn) functionCallingConfig.allowedFunctionNames = ['submit_answer'];
 
-    const callSignal = AbortSignal.any([signal, AbortSignal.timeout(Math.min(CALL_TIMEOUT_MS, Math.max(remaining, 1000)))]);
+    const callSignal = AbortSignal.any([signal, AbortSignal.timeout(Math.min(limits.callMs, Math.max(remaining, 1000)))]);
     let res;
     try {
       res = await ai.models.generateContent({
@@ -256,13 +261,13 @@ async function runModel(model, image, useTools, onStatus, signal, deadline) {
       });
     } catch (e) {
       if (callSignal.aborted && !signal.aborted) {
-        const err = new Error(`nessuna risposta entro ${Math.round(CALL_TIMEOUT_MS / 1000)} s`);
+        const err = new Error(`nessuna risposta entro ${Math.round(limits.callMs / 1000)} s`);
         err.callTimeout = true;
         throw err;
       }
       // Limite al minuto: aspetta e riprova lo stesso turno, senza perdere il lavoro fatto
       const delay = e.status === 429 ? retryDelayMs(e) : null;
-      if (delay !== null && quotaWaits < 2 && deadline - Date.now() > delay + FINAL_RESERVE_MS) {
+      if (delay !== null && quotaWaits < 2 && deadline - Date.now() > delay + limits.reserveMs) {
         quotaWaits += 1;
         onStatus({ phase: 'waiting_quota', count: searches.length });
         await sleep(delay);
@@ -313,7 +318,7 @@ async function runModel(model, image, useTools, onStatus, signal, deadline) {
 
 /**
  * @param {string} dataUrl  immagine come data URL (JPEG/PNG/WebP), già priva di metadati
- * @param {{tools?: boolean, onStatus?: (s: {phase: string, count?: number}) => void}} opts
+ * @param {{tools?: boolean, timeoutMs?: number, onStatus?: (s: {phase: string, count?: number}) => void}} opts
  */
 async function geolocate(dataUrl, opts = {}) {
   if (!isAvailable()) throw new AiError('chiave GEMINI_API_KEY non configurata sul server');
@@ -321,21 +326,23 @@ async function geolocate(dataUrl, opts = {}) {
   if (!m) throw new AiError('formato immagine non supportato');
   const image = { mimeType: m[1], data: m[2] };
   const onStatus = typeof opts.onStatus === 'function' ? opts.onStatus : () => {};
-  const signal = AbortSignal.timeout(TIMEOUT_MS);
-  const deadline = Date.now() + TIMEOUT_MS;
+  const budgetMs = Number(opts.timeoutMs) > 0 ? Number(opts.timeoutMs) : TIMEOUT_MS;
+  const limits = limitsFor(budgetMs);
+  const signal = AbortSignal.timeout(budgetMs);
+  const deadline = Date.now() + budgetMs;
 
   let lastErr;
   for (const model of MODELS) {
     if (deadline - Date.now() < 15000) break;
     try {
-      return await runModel(model, image, opts.tools !== false, onStatus, signal, deadline);
+      return await runModel(model, image, opts.tools !== false, onStatus, signal, deadline, limits);
     } catch (e) {
       lastErr = e;
       console.warn(`[IA] ${model}: ${e.status || ''} ${e.message}`);
       if (!retryable(e) || signal.aborted) break;
     }
   }
-  if (signal.aborted) throw new AiError("tempo scaduto: l'IA non ha risposto entro " + Math.round(TIMEOUT_MS / 1000) + ' s');
+  if (signal.aborted) throw new AiError("tempo scaduto: l'IA non ha risposto entro " + Math.round(budgetMs / 1000) + ' s');
   throw friendlyError(lastErr);
 }
 
